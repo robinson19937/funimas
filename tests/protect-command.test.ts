@@ -11,6 +11,9 @@ import { AstProject } from '../src/parser/AstProject.js';
 import type { AstParserService } from '../src/parser/AstParser.js';
 import { ScanResult } from '../src/scanner/ScanResult.js';
 import type { ProjectScannerService } from '../src/scanner/ProjectScanner.js';
+import { SemanticOperation } from '../src/semantic/SemanticOperation.js';
+import { SemanticResult } from '../src/semantic/SemanticResult.js';
+import type { SemanticAnalyzerService } from '../src/semantic/SemanticAnalyzer.js';
 import { WorkspaceResult } from '../src/workspace/WorkspaceResult.js';
 import type { WorkspaceService } from '../src/workspace/WorkspaceEngine.js';
 import type { OutputWriter } from '../src/utils/output.js';
@@ -24,7 +27,7 @@ class MockOutputWriter implements OutputWriter {
 }
 
 describe('ProtectCommand', () => {
-  it('ejecuta backup, workspace, parser, scanner y grafo mostrando el resumen final', async () => {
+  it('ejecuta todo el pipeline y muestra el resumen semántico', async () => {
     const output = new MockOutputWriter();
     const backupResult = new BackupResult({
       backupPath: '/tmp/mi-proyecto/.funimas/backups/2026-06-18_14-35-22',
@@ -74,6 +77,89 @@ describe('ProtectCommand', () => {
       startedAt: new Date('2026-06-18T14:35:28.000Z'),
       finishedAt: new Date('2026-06-18T14:35:29.000Z'),
     });
+    const semanticResult = new SemanticResult({
+      operations: [
+        new SemanticOperation({
+          type: 'CUSTOM',
+          file: '/tmp/mi-proyecto_funimas/src/app.ts',
+          line: 1,
+          column: 1,
+          description: 'Import de Firebase detectado',
+          metadata: { provider: 'firebase', category: 'import' },
+        }),
+        new SemanticOperation({
+          type: 'DATABASE_INSERT',
+          file: '/tmp/mi-proyecto_funimas/src/data.ts',
+          line: 10,
+          column: 3,
+          description: 'addDoc',
+          metadata: { provider: 'firebase', category: 'firestore' },
+        }),
+        new SemanticOperation({
+          type: 'DATABASE_UPDATE',
+          file: '/tmp/mi-proyecto_funimas/src/data.ts',
+          line: 11,
+          column: 3,
+          description: 'updateDoc',
+          metadata: { provider: 'firebase', category: 'firestore' },
+        }),
+        new SemanticOperation({
+          type: 'DATABASE_DELETE',
+          file: '/tmp/mi-proyecto_funimas/src/data.ts',
+          line: 12,
+          column: 3,
+          description: 'deleteDoc',
+          metadata: { provider: 'firebase', category: 'firestore' },
+        }),
+        new SemanticOperation({
+          type: 'DATABASE_READ',
+          file: '/tmp/mi-proyecto_funimas/src/data.ts',
+          line: 13,
+          column: 3,
+          description: 'getDocs',
+          metadata: { provider: 'firebase', category: 'firestore' },
+        }),
+        new SemanticOperation({
+          type: 'AUTH_LOGIN',
+          file: '/tmp/mi-proyecto_funimas/src/auth.ts',
+          line: 5,
+          column: 3,
+          description: 'signIn',
+          metadata: { provider: 'firebase', category: 'auth' },
+        }),
+        new SemanticOperation({
+          type: 'AUTH_REGISTER',
+          file: '/tmp/mi-proyecto_funimas/src/auth.ts',
+          line: 6,
+          column: 3,
+          description: 'register',
+          metadata: { provider: 'firebase', category: 'auth' },
+        }),
+        new SemanticOperation({
+          type: 'FILE_UPLOAD',
+          file: '/tmp/mi-proyecto_funimas/src/storage.ts',
+          line: 7,
+          column: 3,
+          description: 'uploadBytes',
+          metadata: { provider: 'firebase', category: 'storage' },
+        }),
+      ],
+      totalOperations: 8,
+      operationsByType: {
+        DATABASE_INSERT: 1,
+        DATABASE_UPDATE: 1,
+        DATABASE_DELETE: 1,
+        DATABASE_READ: 1,
+        AUTH_LOGIN: 1,
+        AUTH_REGISTER: 1,
+        AUTH_LOGOUT: 0,
+        FILE_UPLOAD: 1,
+        FILE_DELETE: 0,
+        CUSTOM: 1,
+      },
+      startedAt: new Date('2026-06-18T14:35:30.000Z'),
+      finishedAt: new Date('2026-06-18T14:35:31.000Z'),
+    });
     const backupEngine: BackupService = {
       create: vi.fn().mockResolvedValue(backupResult),
     };
@@ -89,6 +175,9 @@ describe('ProtectCommand', () => {
     const graphBuilder: GraphBuilderService = {
       build: vi.fn().mockReturnValue(graphResult),
     };
+    const semanticAnalyzer: SemanticAnalyzerService = {
+      analyze: vi.fn().mockResolvedValue(semanticResult),
+    };
 
     const command = new ProtectCommand({
       projectPath: './mi-proyecto',
@@ -98,17 +187,26 @@ describe('ProtectCommand', () => {
       astParser,
       projectScanner,
       graphBuilder,
+      semanticAnalyzer,
     });
 
     const result = await command.execute();
 
-    expect(graphBuilder.build).toHaveBeenCalledOnce();
-    expect(graphBuilder.build).toHaveBeenCalledWith(scanResult);
-    expect(result).toBe(graphResult);
+    expect(semanticAnalyzer.analyze).toHaveBeenCalledOnce();
+    expect(semanticAnalyzer.analyze).toHaveBeenCalledWith(graphResult);
+    expect(result).toBe(semanticResult);
 
-    expect(output.lines).toContain('Construyendo Dependency Graph...');
-    expect(output.lines).toContain('✔ Nodos: 58');
-    expect(output.lines).toContain('✔ Relaciones: 214');
-    expect(output.lines).toContain('✔ Componentes: 1');
+    expect(output.lines).toContain('Análisis semántico');
+    expect(output.lines).toContain('✔ Firebase detectado');
+    expect(output.lines).toContain('✔ Firestore');
+    expect(output.lines).toContain('Insert: 1');
+    expect(output.lines).toContain('Update: 1');
+    expect(output.lines).toContain('Delete: 1');
+    expect(output.lines).toContain('Read: 1');
+    expect(output.lines).toContain('✔ Authentication');
+    expect(output.lines).toContain('Login: 1');
+    expect(output.lines).toContain('Register: 1');
+    expect(output.lines).toContain('✔ Storage');
+    expect(output.lines).toContain('Upload: 1');
   });
 });

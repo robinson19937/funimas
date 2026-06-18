@@ -6,6 +6,9 @@ import type { GraphResult } from '../../graph/GraphResult.js';
 import { AstParser, type AstParserService } from '../../parser/index.js';
 import { ProjectScanner, type ProjectScannerService } from '../../scanner/index.js';
 import type { ScanResult } from '../../scanner/ScanResult.js';
+import { SemanticAnalyzer, type SemanticAnalyzerService } from '../../semantic/index.js';
+import type { SemanticResult } from '../../semantic/SemanticResult.js';
+import { SemanticOperation } from '../../semantic/SemanticOperation.js';
 import { ConsoleOutputWriter, NullOutputWriter, type OutputWriter } from '../../utils/index.js';
 import { WorkspaceEngine, type WorkspaceService } from '../../workspace/index.js';
 import type { WorkspaceResult } from '../../workspace/WorkspaceResult.js';
@@ -18,6 +21,7 @@ export interface ProtectCommandOptions {
   astParser?: AstParserService;
   projectScanner?: ProjectScannerService;
   graphBuilder?: GraphBuilderService;
+  semanticAnalyzer?: SemanticAnalyzerService;
 }
 
 export class ProtectCommand {
@@ -28,6 +32,7 @@ export class ProtectCommand {
   private readonly astParser: AstParserService;
   private readonly projectScanner: ProjectScannerService;
   private readonly graphBuilder: GraphBuilderService;
+  private readonly semanticAnalyzer: SemanticAnalyzerService;
 
   constructor(options: ProtectCommandOptions) {
     this.projectPath = resolve(options.projectPath);
@@ -38,9 +43,10 @@ export class ProtectCommand {
     this.astParser = options.astParser ?? new AstParser();
     this.projectScanner = options.projectScanner ?? new ProjectScanner();
     this.graphBuilder = options.graphBuilder ?? new GraphBuilder();
+    this.semanticAnalyzer = options.semanticAnalyzer ?? new SemanticAnalyzer();
   }
 
-  async execute(): Promise<GraphResult> {
+  async execute(): Promise<SemanticResult> {
     await this.backupEngine.create(this.projectPath);
     const workspaceResult = await this.workspaceEngine.create(this.projectPath);
 
@@ -62,7 +68,14 @@ export class ProtectCommand {
 
     this.printGraphSummary(graphResult);
 
-    return graphResult;
+    this.output.writeln('Análisis semántico');
+    this.output.writeln();
+
+    const semanticResult = await this.semanticAnalyzer.analyze(graphResult);
+
+    this.printSemanticSummary(semanticResult);
+
+    return semanticResult;
   }
 
   private printWorkspaceSummary(workspaceResult: WorkspaceResult): void {
@@ -103,5 +116,64 @@ export class ProtectCommand {
     this.output.writeln(`✔ Relaciones: ${graphResult.totalEdges}`);
     this.output.writeln();
     this.output.writeln(`✔ Componentes: ${graphResult.totalConnectedComponents}`);
+    this.output.writeln();
+  }
+
+  private printSemanticSummary(semanticResult: SemanticResult): void {
+    if (semanticResult.hasProvider('firebase')) {
+      this.output.writeln('✔ Firebase detectado');
+      this.output.writeln();
+    }
+
+    const firestoreOperations = semanticResult.getOperationsByMetadata('category', 'firestore');
+
+    if (firestoreOperations.length > 0) {
+      this.output.writeln('✔ Firestore');
+      this.output.writeln(
+        `Insert: ${this.countCategoryOperations(semanticResult, 'firestore', 'DATABASE_INSERT')}`,
+      );
+      this.output.writeln(
+        `Update: ${this.countCategoryOperations(semanticResult, 'firestore', 'DATABASE_UPDATE')}`,
+      );
+      this.output.writeln(
+        `Delete: ${this.countCategoryOperations(semanticResult, 'firestore', 'DATABASE_DELETE')}`,
+      );
+      this.output.writeln(
+        `Read: ${this.countCategoryOperations(semanticResult, 'firestore', 'DATABASE_READ')}`,
+      );
+      this.output.writeln();
+    }
+
+    const authOperations = semanticResult.getOperationsByMetadata('category', 'auth');
+
+    if (authOperations.length > 0) {
+      this.output.writeln('✔ Authentication');
+      this.output.writeln(
+        `Login: ${this.countCategoryOperations(semanticResult, 'auth', 'AUTH_LOGIN')}`,
+      );
+      this.output.writeln(
+        `Register: ${this.countCategoryOperations(semanticResult, 'auth', 'AUTH_REGISTER')}`,
+      );
+      this.output.writeln();
+    }
+
+    const storageOperations = semanticResult.getOperationsByMetadata('category', 'storage');
+
+    if (storageOperations.length > 0) {
+      this.output.writeln('✔ Storage');
+      this.output.writeln(
+        `Upload: ${this.countCategoryOperations(semanticResult, 'storage', 'FILE_UPLOAD')}`,
+      );
+    }
+  }
+
+  private countCategoryOperations(
+    semanticResult: SemanticResult,
+    category: string,
+    type: SemanticOperation['type'],
+  ): number {
+    return semanticResult.operations.filter(
+      (operation) => operation.metadata.category === category && operation.type === type,
+    ).length;
   }
 }

@@ -1,0 +1,14 @@
+export const SEMANTIC_OPERATION_TYPES = [
+  'DATABASE_INSERT',
+  'DATABASE_UPDATE',
+  'DATABASE_DELETE',
+  'DATABASE_READ',
+  'AUTH_LOGIN',
+  'AUTH_REGISTER',
+  'AUTH_LOGOUT',
+  'FILE_UPLOAD',
+  'FILE_DELETE',
+  'CUSTOM',
+] as const;
+
+export type SemanticOperationType = (typeof SEMANTIC_OPERATION_TYPES)[number];
