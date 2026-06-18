@@ -2,7 +2,8 @@ import { resolve } from 'node:path';
 
 import { BackupEngine, type BackupService } from '../../backup/index.js';
 import { AstParser, type AstParserService } from '../../parser/index.js';
-import type { AstParserResult } from '../../parser/AstParserResult.js';
+import { ProjectScanner, type ProjectScannerService } from '../../scanner/index.js';
+import type { ScanResult } from '../../scanner/ScanResult.js';
 import { ConsoleOutputWriter, NullOutputWriter, type OutputWriter } from '../../utils/index.js';
 import { WorkspaceEngine, type WorkspaceService } from '../../workspace/index.js';
 import type { WorkspaceResult } from '../../workspace/WorkspaceResult.js';
@@ -13,6 +14,7 @@ export interface ProtectCommandOptions {
   backupEngine?: BackupService;
   workspaceEngine?: WorkspaceService;
   astParser?: AstParserService;
+  projectScanner?: ProjectScannerService;
 }
 
 export class ProtectCommand {
@@ -21,6 +23,7 @@ export class ProtectCommand {
   private readonly backupEngine: BackupService;
   private readonly workspaceEngine: WorkspaceService;
   private readonly astParser: AstParserService;
+  private readonly projectScanner: ProjectScannerService;
 
   constructor(options: ProtectCommandOptions) {
     this.projectPath = resolve(options.projectPath);
@@ -29,22 +32,25 @@ export class ProtectCommand {
       options.backupEngine ?? new BackupEngine({ output: new NullOutputWriter() });
     this.workspaceEngine = options.workspaceEngine ?? new WorkspaceEngine();
     this.astParser = options.astParser ?? new AstParser();
+    this.projectScanner = options.projectScanner ?? new ProjectScanner();
   }
 
-  async execute(): Promise<AstParserResult> {
+  async execute(): Promise<ScanResult> {
     await this.backupEngine.create(this.projectPath);
     const workspaceResult = await this.workspaceEngine.create(this.projectPath);
 
     this.printWorkspaceSummary(workspaceResult);
 
-    this.output.writeln('Analizando proyecto...');
-    this.output.writeln();
-
     const parseResult = await this.astParser.parse(workspaceResult.workspaceProject);
 
-    this.printAnalysisSummary(parseResult);
+    this.output.writeln('Analizando estructura...');
+    this.output.writeln();
 
-    return parseResult;
+    const scanResult = await this.projectScanner.scan(parseResult.project);
+
+    this.printScanSummary(scanResult);
+
+    return scanResult;
   }
 
   private printWorkspaceSummary(workspaceResult: WorkspaceResult): void {
@@ -64,15 +70,17 @@ export class ProtectCommand {
     this.output.writeln();
   }
 
-  private printAnalysisSummary(parseResult: AstParserResult): void {
-    const { project } = parseResult;
-
-    this.output.writeln('✔ Proyecto cargado');
+  private printScanSummary(scanResult: ScanResult): void {
+    this.output.writeln(`✔ ${scanResult.totalFiles} archivos`);
     this.output.writeln();
-    this.output.writeln(`Archivos encontrados: ${project.totalFiles}`);
+    this.output.writeln(`✔ ${scanResult.totalImports} imports`);
     this.output.writeln();
-    this.output.writeln(`TypeScript: ${project.totalTypescriptFiles}`);
+    this.output.writeln(`✔ ${scanResult.totalFunctions} funciones`);
     this.output.writeln();
-    this.output.writeln(`JavaScript: ${project.totalJavascriptFiles}`);
+    this.output.writeln(`✔ ${scanResult.totalClasses} clases`);
+    this.output.writeln();
+    this.output.writeln(`✔ ${scanResult.totalInterfaces} interfaces`);
+    this.output.writeln();
+    this.output.writeln(`✔ ${scanResult.totalEnums} enums`);
   }
 }
