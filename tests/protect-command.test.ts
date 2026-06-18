@@ -18,6 +18,8 @@ import { TransformationPlan } from '../src/planner/TransformationPlan.js';
 import { PlannerResult } from '../src/planner/PlannerResult.js';
 import { createEmptyActionsByType } from '../src/planner/PlannerResult.js';
 import type { TransformationPlannerService } from '../src/planner/TransformationPlanner.js';
+import { NetlifyAdapter } from '../src/adapters/index.js';
+import type { AdapterRegistryService } from '../src/adapters/index.js';
 import { WorkspaceResult } from '../src/workspace/WorkspaceResult.js';
 import type { WorkspaceService } from '../src/workspace/WorkspaceEngine.js';
 import type { OutputWriter } from '../src/utils/output.js';
@@ -203,6 +205,16 @@ describe('ProtectCommand', () => {
     const transformationPlanner: TransformationPlannerService = {
       plan: vi.fn().mockReturnValue(plannerResult),
     };
+    const adapterRegistry: AdapterRegistryService = {
+      register: vi.fn(),
+      registerMany: vi.fn(),
+      getAdapters: vi.fn().mockReturnValue([]),
+      getAdapter: vi.fn(),
+      detect: vi.fn().mockResolvedValue({
+        detected: true,
+        adapter: new NetlifyAdapter(),
+      }),
+    };
 
     const command = new ProtectCommand({
       projectPath: './mi-proyecto',
@@ -214,6 +226,7 @@ describe('ProtectCommand', () => {
       graphBuilder,
       semanticAnalyzer,
       transformationPlanner,
+      adapterRegistry,
     });
 
     const result = await command.execute();
@@ -243,5 +256,11 @@ describe('ProtectCommand', () => {
     expect(output.lines).toContain('✔ Rewrites: 12');
     expect(output.lines).toContain('✔ Imports: 12');
     expect(output.lines).toContain('✔ Validaciones: 1');
+    expect(output.lines).toContain('Detectando plataforma...');
+    expect(output.lines).toContain('✔ Netlify');
+    expect(output.lines).toContain('Capabilities');
+    expect(output.lines).toContain('✔ Runtime');
+    expect(output.lines).toContain('✔ Functions');
+    expect(output.lines).toContain('✔ Environment');
   });
 });

@@ -1,5 +1,13 @@
 import { resolve } from 'node:path';
 
+import {
+  ADAPTER_FEATURE_LABELS,
+  AdapterContext,
+  createDefaultAdapterRegistry,
+  type AdapterFeature,
+  type AdapterRegistryDetectionResult,
+  type AdapterRegistryService,
+} from '../../adapters/index.js';
 import { BackupEngine, type BackupService } from '../../backup/index.js';
 import { GraphBuilder, type GraphBuilderService } from '../../graph/index.js';
 import type { GraphResult } from '../../graph/GraphResult.js';
@@ -25,6 +33,7 @@ export interface ProtectCommandOptions {
   graphBuilder?: GraphBuilderService;
   semanticAnalyzer?: SemanticAnalyzerService;
   transformationPlanner?: TransformationPlannerService;
+  adapterRegistry?: AdapterRegistryService;
 }
 
 export class ProtectCommand {
@@ -37,6 +46,7 @@ export class ProtectCommand {
   private readonly graphBuilder: GraphBuilderService;
   private readonly semanticAnalyzer: SemanticAnalyzerService;
   private readonly transformationPlanner: TransformationPlannerService;
+  private readonly adapterRegistry: AdapterRegistryService;
 
   constructor(options: ProtectCommandOptions) {
     this.projectPath = resolve(options.projectPath);
@@ -49,6 +59,7 @@ export class ProtectCommand {
     this.graphBuilder = options.graphBuilder ?? new GraphBuilder();
     this.semanticAnalyzer = options.semanticAnalyzer ?? new SemanticAnalyzer();
     this.transformationPlanner = options.transformationPlanner ?? new TransformationPlanner();
+    this.adapterRegistry = options.adapterRegistry ?? createDefaultAdapterRegistry();
   }
 
   async execute(): Promise<PlannerResult> {
@@ -86,6 +97,20 @@ export class ProtectCommand {
     const plannerResult = this.transformationPlanner.plan(semanticResult);
 
     this.printPlannerSummary(plannerResult);
+
+    this.output.writeln('Detectando plataforma...');
+    this.output.writeln();
+
+    const adapterDetection = await this.adapterRegistry.detect(
+      new AdapterContext({
+        projectPath: this.projectPath,
+        workspacePath: workspaceResult.workspaceProject,
+        semanticResult,
+        plannerResult,
+      }),
+    );
+
+    this.printAdapterSummary(adapterDetection);
 
     return plannerResult;
   }
@@ -203,5 +228,27 @@ export class ProtectCommand {
     this.output.writeln(`✔ Imports: ${plannerResult.actionsByType.UPDATE_IMPORTS}`);
     this.output.writeln();
     this.output.writeln(`✔ Validaciones: ${plannerResult.actionsByType.VALIDATE_PROJECT}`);
+  }
+
+  private printAdapterSummary(detection: AdapterRegistryDetectionResult): void {
+    if (!detection.adapter) {
+      this.output.writeln('✔ Plataforma no detectada');
+      this.output.writeln();
+      return;
+    }
+
+    this.output.writeln(`✔ ${detection.adapter.name}`);
+    this.output.writeln();
+    this.output.writeln('Capabilities');
+    this.output.writeln();
+
+    const displayFeatures: AdapterFeature[] = ['runtime', 'functions', 'environment'];
+
+    for (const feature of displayFeatures) {
+      if (detection.adapter.supports(feature)) {
+        this.output.writeln(`✔ ${ADAPTER_FEATURE_LABELS[feature]}`);
+        this.output.writeln();
+      }
+    }
   }
 }

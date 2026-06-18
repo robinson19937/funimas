@@ -1,0 +1,9 @@
+service: funimas-sample
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+
+functions:
+  hello:
+    handler: src/handlers/hello.handler
