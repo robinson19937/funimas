@@ -1,18 +1,100 @@
 # Funimas
 
-CLI profesional en TypeScript para proteger y gestionar proyectos de software.
+Herramienta de línea de comandos que protege tu proyecto de software. Analiza el código, crea una copia de trabajo segura y aplica cambios **sin tocar los archivos originales**.
 
-## Requisitos
+## ¿Qué necesitas antes de empezar?
 
-- Node.js >= 20
+1. **Node.js** versión 20 o superior.  
+   Puedes comprobarlo abriendo una terminal y escribiendo:
 
-## Instalación
+   ```bash
+   node --version
+   ```
+
+2. **Git** instalado en tu computadora.
+
+3. Una **terminal** (en Windows: PowerShell o CMD; en Mac/Linux: Terminal).
+
+## Instalación (solo la primera vez)
+
+Copia y pega estos comandos **uno por uno** en la terminal. Espera a que cada uno termine antes de ejecutar el siguiente.
+
+```bash
+git clone https://github.com/robinson19937/funimas.git
+```
+
+Descarga el proyecto Funimas en tu computadora.
+
+```bash
+cd funimas
+```
+
+Entra en la carpeta del proyecto.
 
 ```bash
 npm install
 ```
 
-## Scripts
+Instala las dependencias necesarias.
+
+```bash
+npm run build
+```
+
+Prepara Funimas para poder usarlo.
+
+```bash
+npm link
+```
+
+Registra el comando `funimas` en tu sistema. A partir de aquí podrás escribir `funimas` desde cualquier carpeta.
+
+> **Si `npm link` da error de permisos**, puedes usar Funimas sin registrarlo:
+>
+> ```bash
+> node dist/cli/index.js protect ./ruta-de-tu-proyecto
+> ```
+
+## Cómo usar Funimas
+
+### Paso 1: Proteger un proyecto
+
+En la terminal, ve a la carpeta donde está tu proyecto (o usa la ruta completa) y ejecuta:
+
+```bash
+funimas protect ./ruta-de-tu-proyecto
+```
+
+**Ejemplo con el proyecto de demostración incluido:**
+
+```bash
+funimas protect ./examples/react-firebase-crud
+```
+
+### Paso 2: Qué hace Funimas
+
+1. Crea una **copia de seguridad** de tu proyecto.
+2. Genera una **copia de trabajo** en una carpeta nueva llamada `<tu-proyecto>_funimas`.
+3. Analiza el código y aplica las protecciones necesarias.
+4. Genera informes con los cambios realizados.
+
+**Tu proyecto original no se modifica.** Todo ocurre en la carpeta nueva.
+
+### Paso 3: Dónde ver los resultados
+
+| Qué buscas | Dónde está |
+| ---------- | ---------- |
+| Proyecto protegido (copia de trabajo) | `<tu-proyecto>_funimas/` |
+| Copia de seguridad | `.funimas/backups/` (dentro del proyecto original) |
+| Informes de cambios | `.funimas/reports/` (dentro del proyecto original) |
+
+### Requisitos del proyecto a proteger (versión actual)
+
+- Debe ser un proyecto con código TypeScript o JavaScript.
+- Debe tener un archivo `netlify.toml` en la raíz.
+- Debe usar llamadas `addDoc()` de Firestore (es lo que Funimas protege hoy).
+
+## Scripts de desarrollo
 
 | Script  | Descripción                                      |
 | ------- | ------------------------------------------------ |
@@ -22,20 +104,9 @@ npm install
 | `test`  | Ejecuta las pruebas unitarias con Vitest         |
 | `lint`  | Analiza el código con ESLint                     |
 
-## Uso
+## Comandos disponibles
 
-```bash
-# Desarrollo
-npm run dev -- protect ./mi-proyecto
-
-# Producción
-npm run build
-npm start -- protect ./mi-proyecto
-```
-
-### Comandos disponibles
-
-#### `protect <ruta-del-proyecto>`
+### `protect <ruta-del-proyecto>`
 
 Inicializa la protección de un proyecto siguiendo este flujo:
 
@@ -45,7 +116,9 @@ Inicializa la protección de un proyecto siguiendo este flujo:
 4. **Project Scanner** para construir el índice interno del proyecto
 5. **Dependency Graph** para mapear relaciones entre archivos
 6. **Semantic Analyzer** para detectar operaciones semánticas mediante reglas extensibles
-7. **Transformation Planner** para generar el plan de ejecución sin modificar archivos
+7. **Transformation Planner** para generar el plan de ejecución
+8. **Code Rewriter** para aplicar los cambios en el workspace
+9. **Validation** y generación de **informes**
 
 ```
 Funimas
@@ -118,27 +191,29 @@ Planificando transformación...
 ✔ Validaciones: 1
 ```
 
-El planner decide qué acciones ejecutar (runtime, SDK, functions, rewrites, etc.) sin modificar ningún archivo. Está preparado para un futuro **Executor** que ejecutará el plan.
-
 ## Estructura del proyecto
 
 ```
 src/
   cli/         Punto de entrada y comandos de la CLI
-  compiler/    Lógica de compilación (futuro)
+  pipeline/    Orquestador principal del flujo de protección
   parser/      Carga y modelo AST del proyecto (AstParser / ts-morph)
   scanner/     Índice interno del proyecto (ProjectScanner)
   graph/       Grafo de dependencias del proyecto (DependencyGraph)
   semantic/    Análisis semántico basado en reglas (SemanticAnalyzer)
-  analyzer/    Análisis de alto nivel (futuro)
-  planner/     Planificación (futuro)
-  generator/   Generación de código (futuro)
+  planner/     Planificación de transformaciones
+  generator/   Generación de código (functions, SDK, runtime)
+  rewriter/    Aplicación de cambios en el código
+  validation/  Motor de validación post-transformación
+  rollback/    Reversión parcial de cambios
   backup/      Motor de copias de seguridad (BackupEngine)
   workspace/   Copia de trabajo del proyecto (WorkspaceEngine)
-  report/      Informes (futuro)
+  report/      Generación de informes
+  history/     Historial de transformaciones
   utils/       Utilidades compartidas
 tests/         Pruebas unitarias
-templates/     Plantillas (futuro)
+templates/     Plantillas Handlebars
+examples/      Proyectos de ejemplo
 ```
 
 ## Licencia
