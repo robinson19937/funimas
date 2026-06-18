@@ -1,0 +1,39 @@
+{
+  "name": "funimas",
+  "version": "0.1.0",
+  "description": "CLI para proteger y gestionar proyectos de software",
+  "type": "module",
+  "main": "./dist/cli/index.js",
+  "bin": {
+    "funimas": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "tsx watch src/cli/index.ts",
+    "build": "tsc",
+    "start": "node dist/cli/index.js",
+    "test": "vitest run",
+    "lint": "eslint src tests"
+  },
+  "keywords": [
+    "cli",
+    "funimas"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.29.0",
+    "@types/node": "^24.0.3",
+    "eslint": "^9.29.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.5.3",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.34.1",
+    "vitest": "^3.2.4"
+  }
+}
