@@ -15,6 +15,7 @@
     "build": "tsc",
     "start": "node dist/cli/index.js",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint src tests"
   },
   "keywords": [
@@ -28,6 +29,7 @@
   "devDependencies": {
     "@eslint/js": "^9.29.0",
     "@types/node": "^24.0.3",
+    "@vitest/coverage-v8": "^3.2.6",
     "eslint": "^9.29.0",
     "eslint-config-prettier": "^10.1.5",
     "prettier": "^3.5.3",
