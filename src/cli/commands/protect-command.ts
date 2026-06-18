@@ -20,6 +20,8 @@ import {
   type RuntimeGeneratorService,
   type SDKGeneratorService,
 } from '../../generator/index.js';
+import { CodeRewriter, RewriteContext, type CodeRewriterService } from '../../rewriter/index.js';
+import type { RewriteResult } from '../../rewriter/RewriteResult.js';
 import { TransformationPlanner, type TransformationPlannerService } from '../../planner/index.js';
 import { PlannerContext } from '../../planner/PlannerContext.js';
 import { isSupportedFunctionOperation } from '../../generator/operation-utils.js';
@@ -48,6 +50,7 @@ export interface ProtectCommandOptions {
   runtimeGenerator?: RuntimeGeneratorService;
   sdkGenerator?: SDKGeneratorService;
   functionGenerator?: FunctionGeneratorService;
+  codeRewriter?: CodeRewriterService;
 }
 
 export class ProtectCommand {
@@ -64,6 +67,7 @@ export class ProtectCommand {
   private readonly runtimeGenerator: RuntimeGeneratorService;
   private readonly sdkGenerator: SDKGeneratorService;
   private readonly functionGenerator: FunctionGeneratorService;
+  private readonly codeRewriter: CodeRewriterService;
 
   constructor(options: ProtectCommandOptions) {
     this.projectPath = resolve(options.projectPath);
@@ -80,6 +84,7 @@ export class ProtectCommand {
     this.runtimeGenerator = options.runtimeGenerator ?? new RuntimeGenerator();
     this.sdkGenerator = options.sdkGenerator ?? new SDKGenerator();
     this.functionGenerator = options.functionGenerator ?? new FunctionGenerator();
+    this.codeRewriter = options.codeRewriter ?? new CodeRewriter();
   }
 
   async execute(): Promise<PlannerResult> {
@@ -181,6 +186,19 @@ export class ProtectCommand {
         }
       }
     }
+
+    this.output.writeln('Reescribiendo código...');
+    this.output.writeln();
+
+    const rewriteResult = await this.codeRewriter.rewrite(
+      new RewriteContext({
+        projectPath: this.projectPath,
+        workspacePath: workspaceResult.workspaceProject,
+        semanticResult,
+      }),
+    );
+
+    this.printRewriteSummary(rewriteResult);
 
     return plannerResult;
   }
@@ -317,6 +335,23 @@ export class ProtectCommand {
     for (const feature of displayFeatures) {
       if (detection.adapter.supports(feature)) {
         this.output.writeln(`✔ ${ADAPTER_FEATURE_LABELS[feature]}`);
+        this.output.writeln();
+      }
+    }
+  }
+
+  private printRewriteSummary(rewriteResult: RewriteResult): void {
+    for (const fileName of rewriteResult.modifiedFiles) {
+      this.output.writeln(`✔ ${fileName}`);
+      this.output.writeln();
+    }
+
+    this.output.writeln('Operaciones transformadas:');
+    this.output.writeln();
+
+    for (const [operationType, count] of Object.entries(rewriteResult.operationsRewritten)) {
+      if (count > 0) {
+        this.output.writeln(`${operationType}: ${count}`);
         this.output.writeln();
       }
     }

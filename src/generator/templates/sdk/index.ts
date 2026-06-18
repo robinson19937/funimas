@@ -1,4 +1,12 @@
 export function renderSdkIndex(): string {
-  return `export { DatabaseClient } from './database/DatabaseClient.js';
+  return `import { DatabaseClient } from './database/DatabaseClient.js';
+
+const database = new DatabaseClient();
+
+export const Funimas = {
+  database,
+};
+
+export { DatabaseClient } from './database/DatabaseClient.js';
 `;
 }

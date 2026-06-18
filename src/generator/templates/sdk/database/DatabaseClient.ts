@@ -1,6 +1,6 @@
 export function renderDatabaseClient(): string {
   return `export class DatabaseClient {
-  insert(_collection: string, _data: unknown): void {
+  async insert(_collection: string, _data: unknown): Promise<void> {
     // Placeholder for future HTTP implementation
   }
 }

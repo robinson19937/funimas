@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@funimas/sdk": ["./sdk/index.ts"]
+    }
+  },
+  "include": ["src/**/*", "sdk/**/*", "runtime/**/*"]
+}

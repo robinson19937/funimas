@@ -26,6 +26,8 @@ import type {
   RuntimeGeneratorService,
   SDKGeneratorService,
 } from '../src/generator/index.js';
+import { RewriteResult, createEmptyOperationsRewritten } from '../src/rewriter/RewriteResult.js';
+import type { CodeRewriterService } from '../src/rewriter/index.js';
 import { WorkspaceResult } from '../src/workspace/WorkspaceResult.js';
 import type { WorkspaceService } from '../src/workspace/WorkspaceEngine.js';
 import type { OutputWriter } from '../src/utils/output.js';
@@ -258,6 +260,22 @@ describe('ProtectCommand', () => {
       ),
     };
 
+    const codeRewriter: CodeRewriterService = {
+      rewrite: vi.fn().mockResolvedValue(
+        new RewriteResult({
+          modifiedFiles: ['App.tsx', 'clientes.ts'],
+          operationsRewritten: {
+            ...createEmptyOperationsRewritten(),
+            DATABASE_INSERT: 1,
+          },
+          importsAdded: ['@funimas/sdk:Funimas'],
+          importsRemoved: ['addDoc'],
+          startedAt: new Date('2026-06-18T14:35:37.000Z'),
+          finishedAt: new Date('2026-06-18T14:35:38.000Z'),
+        }),
+      ),
+    };
+
     const command = new ProtectCommand({
       projectPath: './mi-proyecto',
       output,
@@ -272,6 +290,7 @@ describe('ProtectCommand', () => {
       runtimeGenerator,
       sdkGenerator,
       functionGenerator,
+      codeRewriter,
     });
 
     const result = await command.execute();
@@ -314,5 +333,10 @@ describe('ProtectCommand', () => {
     expect(runtimeGenerator.generate).toHaveBeenCalledOnce();
     expect(sdkGenerator.generate).toHaveBeenCalledOnce();
     expect(functionGenerator.generate).toHaveBeenCalledOnce();
+    expect(output.lines).toContain('Reescribiendo código...');
+    expect(output.lines).toContain('✔ App.tsx');
+    expect(output.lines).toContain('Operaciones transformadas:');
+    expect(output.lines).toContain('DATABASE_INSERT: 1');
+    expect(codeRewriter.rewrite).toHaveBeenCalledOnce();
   });
 });

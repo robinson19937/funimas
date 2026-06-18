@@ -101,6 +101,7 @@ describe('SDKGenerator', () => {
     );
 
     expect(sdkIndex).toContain("from './database/DatabaseClient.js'");
+    expect(sdkIndex).toContain('export const Funimas');
     expect(databaseClient).toContain('export class DatabaseClient');
     expect(databaseClient).toContain('insert(');
   });
