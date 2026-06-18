@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 import type { GeneratedFile } from '../adapters/GeneratedFile.js';
+import { GeneratedFileVerifier } from './GeneratedFileVerifier.js';
 
 export class GeneratorFileWriterError extends Error {
   constructor(message: string) {
@@ -17,7 +18,20 @@ export interface WrittenFile extends GeneratedFile {
 /**
  * Escribe archivos generados exclusivamente dentro del workspace.
  */
+export interface GeneratorFileWriterOptions {
+  verifier?: GeneratedFileVerifier;
+  generatorName?: string;
+}
+
 export class GeneratorFileWriter {
+  private readonly verifier: GeneratedFileVerifier;
+  private readonly generatorName: string;
+
+  constructor(options: GeneratorFileWriterOptions = {}) {
+    this.verifier = options.verifier ?? new GeneratedFileVerifier();
+    this.generatorName = options.generatorName ?? 'GeneratorFileWriter';
+  }
+
   async writeFile(workspacePath: string, file: GeneratedFile): Promise<WrittenFile> {
     const workspaceRoot = resolve(workspacePath);
     const absolutePath = resolve(workspaceRoot, file.relativePath);
@@ -31,10 +45,14 @@ export class GeneratorFileWriter {
     await mkdir(dirname(absolutePath), { recursive: true });
     await writeFile(absolutePath, file.content, 'utf8');
 
-    return {
+    const written: WrittenFile = {
       ...file,
       absolutePath,
     };
+
+    await this.verifier.verifyWrittenFile(workspacePath, written, this.generatorName);
+
+    return written;
   }
 
   async writeFiles(workspacePath: string, files: GeneratedFile[]): Promise<WrittenFile[]> {

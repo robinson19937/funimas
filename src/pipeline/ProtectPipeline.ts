@@ -8,6 +8,7 @@ import {
   type AdapterFeature,
   type AdapterRegistryDetectionResult,
   type AdapterRegistryService,
+  type PlatformAdapter,
 } from '../adapters/index.js';
 import { BackupEngine, type BackupService } from '../backup/index.js';
 import { GraphBuilder, type GraphBuilderService } from '../graph/index.js';
@@ -15,6 +16,8 @@ import type { GraphResult } from '../graph/GraphResult.js';
 import {
   FunctionGenerator,
   GeneratorContext,
+  GeneratedFileVerifier,
+  GenerationVerificationError,
   SDKGenerator,
   type FunctionGeneratorService,
   type SDKGeneratorService,
@@ -42,7 +45,8 @@ import { VERSION } from '../utils/version.js';
 import { WorkspaceEngine, type WorkspaceService } from '../workspace/index.js';
 import type { WorkspaceResult } from '../workspace/WorkspaceResult.js';
 import { ValidationEngine, ValidationContext, type ValidationEngineService } from '../validation/index.js';
-import type { ValidationResult } from '../validation/ValidationResult.js';
+import { ValidationError } from '../validation/ValidationError.js';
+import { ValidationResult } from '../validation/ValidationResult.js';
 import { RollbackManager, RollbackContext, type RollbackManagerService } from '../rollback/index.js';
 import type { ProtectPipelineResult } from './ProtectPipelineResult.js';
 
@@ -66,6 +70,7 @@ export interface ProtectPipelineOptions {
   validationEngine?: ValidationEngineService;
   rollbackManager?: RollbackManagerService;
   databaseInsertFunctionGenerator?: DatabaseInsertFunctionGenerator;
+  generatedFileVerifier?: GeneratedFileVerifier;
 }
 
 export class ProtectPipeline {
@@ -88,6 +93,7 @@ export class ProtectPipeline {
   private readonly validationEngine: ValidationEngineService;
   private readonly rollbackManager: RollbackManagerService;
   private readonly databaseInsertFunctionGenerator: DatabaseInsertFunctionGenerator;
+  private readonly generatedFileVerifier: GeneratedFileVerifier;
   private readonly executionId: string;
 
   constructor(options: ProtectPipelineOptions) {
@@ -113,6 +119,7 @@ export class ProtectPipeline {
     this.rollbackManager = options.rollbackManager ?? new RollbackManager();
     this.databaseInsertFunctionGenerator =
       options.databaseInsertFunctionGenerator ?? new DatabaseInsertFunctionGenerator();
+    this.generatedFileVerifier = options.generatedFileVerifier ?? new GeneratedFileVerifier();
     this.executionId = randomUUID();
   }
 
@@ -170,139 +177,63 @@ export class ProtectPipeline {
     const history = new TransformationHistory(workspaceResult.workspaceProject);
     await history.initialize();
 
-    if (adapterDetection.adapter) {
-      const generatorContext = new GeneratorContext({
-        projectPath: this.projectPath,
-        workspacePath: workspaceResult.workspaceProject,
-        semanticResult,
-        adapter: adapterDetection.adapter,
-      });
+    let generationError: GenerationVerificationError | undefined;
 
-      this.output.writeln('Generando Functions...');
-      this.output.writeln();
-
-      const plannerContext = new PlannerContext(semanticResult);
-      const processedOperationTypes = new Set<string>();
-
-      for (const operation of plannerContext.getTransformableOperations()) {
-        if (!isSupportedFunctionOperation(operation.type)) {
-          continue;
-        }
-
-        if (processedOperationTypes.has(operation.type)) {
-          continue;
-        }
-
-        processedOperationTypes.add(operation.type);
-
-        const insertResult = await this.databaseInsertFunctionGenerator.generate(
-          generatorContext,
-          operation,
-          adapterDetection.adapter,
-        );
-
-        if (insertResult) {
-          this.output.writeln(`✔ ${insertResult.file.fileName}`);
-          this.output.writeln();
-
-          await history.record({
-            file: insertResult.file.absolutePath,
-            operation: 'GENERATE_FUNCTION',
-            rewriteRule: insertResult.metadata.generatedBy,
-            before: '',
-            after: insertResult.file.content,
-            generatedFiles: insertResult.metadata.relatedGeneratedFiles,
-            modifiedImports: [],
-            status: 'COMPLETED',
-            reason: insertResult.metadata.reason,
-            benefit: insertResult.metadata.benefit,
-            riskLevel: insertResult.metadata.riskLevel,
-            generatedBy: insertResult.metadata.generatedBy,
-            templateUsed: insertResult.metadata.templateUsed,
-            compilerVersion: insertResult.metadata.compilerVersion,
-          });
-
-          continue;
-        }
-
-        const functionResult = await this.functionGenerator.generate(
-          generatorContext,
-          operation,
-          adapterDetection.adapter,
-        );
-
-        for (const fileName of functionResult.functionFileNames) {
-          this.output.writeln(`✔ ${fileName}`);
-          this.output.writeln();
-
-          if (functionResult.files.length > 0) {
-            const generatedFile = functionResult.files.find((file) => file.fileName === fileName);
-
-            if (generatedFile) {
-              const callee =
-                typeof operation.metadata.callee === 'string' ? operation.metadata.callee : undefined;
-
-              await history.record({
-                file: generatedFile.absolutePath,
-                operation: 'GENERATE_FUNCTION',
-                rewriteRule: 'FunctionGenerator',
-                before: '',
-                after: generatedFile.content,
-                generatedFiles: [generatedFile.relativePath],
-                modifiedImports: [],
-                status: 'COMPLETED',
-                reason: TransformationReason.forOperation(operation.type, callee),
-                benefit: TransformationBenefit.forOperation(operation.type, callee),
-                riskLevel: 'LOW',
-                generatedBy: 'FunctionGenerator',
-                templateUsed: 'templates/netlify/databaseInsert.hbs',
-                compilerVersion: VERSION,
-              });
-            }
-          }
-        }
-      }
-
-      this.output.writeln('Generando Runtime...');
-      this.output.writeln();
-
-      const runtimeResult = await this.backendRuntimeGenerator.generate(
-        new RuntimeContext({
-          projectPath: this.projectPath,
+    try {
+      if (adapterDetection.adapter) {
+        await this.runGenerationPhase({
+          adapter: adapterDetection.adapter,
+          generatorContext: new GeneratorContext({
+            projectPath: this.projectPath,
+            workspacePath: workspaceResult.workspaceProject,
+            semanticResult,
+            adapter: adapterDetection.adapter,
+          }),
           workspacePath: workspaceResult.workspaceProject,
           history,
-        }),
-      );
-
-      for (const generatedFile of runtimeResult.generatedFiles) {
-        this.output.writeln(`✔ ${generatedFile.fileName}`);
-        this.output.writeln();
-      }
-
-      this.output.writeln('Generando SDK...');
-      this.output.writeln();
-      const sdkResult = await this.sdkGenerator.generate(generatorContext);
-      this.output.writeln('✔ SDK');
-      this.output.writeln();
-
-      for (const generatedFile of sdkResult.files) {
-        await history.record({
-          file: generatedFile.absolutePath,
-          operation: 'GENERATE_SDK',
-          rewriteRule: 'SDKGenerator',
-          before: '',
-          after: generatedFile.content,
-          generatedFiles: [generatedFile.relativePath],
-          modifiedImports: [],
-          status: 'COMPLETED',
-          reason: 'El SDK centraliza el acceso a operaciones protegidas desde el cliente.',
-          benefit: TransformationBenefit.forOperation('DATABASE_INSERT', 'addDoc'),
-          riskLevel: 'LOW',
-          generatedBy: 'SDKGenerator',
-          templateUsed: 'src/generator/templates/sdk/index.ts',
-          compilerVersion: VERSION,
         });
       }
+    } catch (error) {
+      if (error instanceof GenerationVerificationError) {
+        generationError = error;
+        this.output.writeln('Error de generación');
+        this.output.writeln();
+        this.output.writeln(`✗ ${error.message}`);
+        this.output.writeln();
+      } else {
+        throw error;
+      }
+    }
+
+    if (generationError) {
+      const pipelineFinishedAt = new Date();
+      const durationMs = pipelineFinishedAt.getTime() - pipelineStartedAt.getTime();
+      const reportsDirectory = join(workspaceResult.workspaceProject, '.funimas', 'reports');
+      const validationResult = this.createGenerationFailureValidationResult(
+        generationError,
+        pipelineFinishedAt,
+      );
+
+      this.output.writeln('═══════════════════════════════════════');
+      this.output.writeln('Funimas — Protección detenida');
+      this.output.writeln('═══════════════════════════════════════');
+      this.output.writeln();
+      this.output.writeln('La generación de archivos falló antes de la validación.');
+      this.output.writeln();
+
+      return {
+        success: false,
+        executionId: this.executionId,
+        projectPath: this.projectPath,
+        workspaceResult,
+        plannerResult,
+        semanticResult,
+        validationResult,
+        durationMs,
+        transformationsRegistered: history.getRecordCount(),
+        reportsDirectory,
+        generationError: generationError.message,
+      };
     }
 
     this.output.writeln('Reescribiendo código...');
@@ -639,6 +570,202 @@ export class ProtectPipeline {
 
     this.output.writeln('Errores encontrados');
     this.output.writeln();
+  }
+
+  private async runGenerationPhase(options: {
+    adapter: PlatformAdapter;
+    generatorContext: GeneratorContext;
+    workspacePath: string;
+    history: TransformationHistory;
+  }): Promise<void> {
+    const { adapter, generatorContext, workspacePath, history } = options;
+
+    this.output.writeln('Generando Functions...');
+    this.output.writeln();
+
+    const plannerContext = new PlannerContext(generatorContext.semanticResult);
+    const processedOperationTypes = new Set<string>();
+
+    for (const operation of plannerContext.getTransformableOperations()) {
+      if (!isSupportedFunctionOperation(operation.type)) {
+        continue;
+      }
+
+      if (processedOperationTypes.has(operation.type)) {
+        continue;
+      }
+
+      processedOperationTypes.add(operation.type);
+
+      const insertResult = await this.databaseInsertFunctionGenerator.generate(
+        generatorContext,
+        operation,
+        adapter,
+      );
+
+      if (insertResult) {
+        await this.generatedFileVerifier.verifyWrittenFile(
+          workspacePath,
+          insertResult.file,
+          insertResult.metadata.generatedBy,
+        );
+
+        this.output.writeln(`✔ ${insertResult.file.fileName}`);
+        this.output.writeln();
+
+        await history.record({
+          file: insertResult.file.absolutePath,
+          operation: 'GENERATE_FUNCTION',
+          rewriteRule: insertResult.metadata.generatedBy,
+          before: '',
+          after: insertResult.file.content,
+          generatedFiles: insertResult.metadata.relatedGeneratedFiles,
+          modifiedImports: [],
+          status: 'COMPLETED',
+          reason: insertResult.metadata.reason,
+          benefit: insertResult.metadata.benefit,
+          riskLevel: insertResult.metadata.riskLevel,
+          generatedBy: insertResult.metadata.generatedBy,
+          templateUsed: insertResult.metadata.templateUsed,
+          compilerVersion: insertResult.metadata.compilerVersion,
+        });
+
+        continue;
+      }
+
+      const functionResult = await this.functionGenerator.generate(
+        generatorContext,
+        operation,
+        adapter,
+      );
+
+      if (functionResult.functionFileNames.length > 0) {
+        await this.generatedFileVerifier.verifyWrittenFiles(
+          workspacePath,
+          functionResult.files,
+          'FunctionGenerator',
+        );
+
+        if (functionResult.files.length !== functionResult.functionFileNames.length) {
+          const missing = functionResult.functionFileNames.filter(
+            (fileName) => !functionResult.files.some((file) => file.fileName === fileName),
+          );
+
+          throw new GenerationVerificationError(
+            'FunctionGenerator',
+            missing[0] ?? 'unknown',
+            join(workspacePath, missing[0] ?? 'unknown'),
+            'archivo reportado sin escritura en disco',
+          );
+        }
+      }
+
+      for (const fileName of functionResult.functionFileNames) {
+        this.output.writeln(`✔ ${fileName}`);
+        this.output.writeln();
+
+        const generatedFile = functionResult.files.find((file) => file.fileName === fileName);
+
+        if (generatedFile) {
+          const callee =
+            typeof operation.metadata.callee === 'string' ? operation.metadata.callee : undefined;
+
+          await history.record({
+            file: generatedFile.absolutePath,
+            operation: 'GENERATE_FUNCTION',
+            rewriteRule: 'FunctionGenerator',
+            before: '',
+            after: generatedFile.content,
+            generatedFiles: [generatedFile.relativePath],
+            modifiedImports: [],
+            status: 'COMPLETED',
+            reason: TransformationReason.forOperation(operation.type, callee),
+            benefit: TransformationBenefit.forOperation(operation.type, callee),
+            riskLevel: 'LOW',
+            generatedBy: 'FunctionGenerator',
+            templateUsed: 'templates/netlify/databaseInsert.hbs',
+            compilerVersion: VERSION,
+          });
+        }
+      }
+    }
+
+    this.output.writeln('Generando Runtime...');
+    this.output.writeln();
+
+    const runtimeResult = await this.backendRuntimeGenerator.generate(
+      new RuntimeContext({
+        projectPath: this.projectPath,
+        workspacePath,
+        history,
+      }),
+    );
+
+    await this.generatedFileVerifier.verifyPaths(
+      workspacePath,
+      runtimeResult.generatedFiles.map((file) => file.relativePath),
+      'RuntimeGenerator',
+    );
+
+    for (const generatedFile of runtimeResult.generatedFiles) {
+      this.output.writeln(`✔ ${generatedFile.fileName}`);
+      this.output.writeln();
+    }
+
+    this.output.writeln('Generando SDK...');
+    this.output.writeln();
+
+    const sdkResult = await this.sdkGenerator.generate(generatorContext);
+
+    await this.generatedFileVerifier.verifyWrittenFiles(
+      workspacePath,
+      sdkResult.files,
+      'SDKGenerator',
+    );
+
+    this.output.writeln('✔ SDK');
+    this.output.writeln();
+
+    for (const generatedFile of sdkResult.files) {
+      await history.record({
+        file: generatedFile.absolutePath,
+        operation: 'GENERATE_SDK',
+        rewriteRule: 'SDKGenerator',
+        before: '',
+        after: generatedFile.content,
+        generatedFiles: [generatedFile.relativePath],
+        modifiedImports: [],
+        status: 'COMPLETED',
+        reason: 'El SDK centraliza el acceso a operaciones protegidas desde el cliente.',
+        benefit: TransformationBenefit.forOperation('DATABASE_INSERT', 'addDoc'),
+        riskLevel: 'LOW',
+        generatedBy: 'SDKGenerator',
+        templateUsed: 'src/generator/templates/sdk/index.ts',
+        compilerVersion: VERSION,
+      });
+    }
+  }
+
+  private createGenerationFailureValidationResult(
+    error: GenerationVerificationError,
+    finishedAt: Date,
+  ): ValidationResult {
+    return new ValidationResult({
+      valid: false,
+      ruleResults: [],
+      errors: [
+        new ValidationError({
+          ruleId: 'generation-verification',
+          ruleName: 'Verificación de generación',
+          message: error.message,
+          files: [error.relativePath],
+        }),
+      ],
+      failedTransformationIds: [],
+      rolledBackTransformationIds: [],
+      startedAt: finishedAt,
+      finishedAt,
+    });
   }
 
   private printRewriteSummary(rewriteResult: RewriteResult): void {

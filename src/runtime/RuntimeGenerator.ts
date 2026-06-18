@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
+import { GeneratedFileVerifier } from '../generator/GeneratedFileVerifier.js';
 import type { RuntimeContext } from './RuntimeContext.js';
 import { RuntimeResult } from './RuntimeResult.js';
 import { RuntimeTemplateEngine } from './RuntimeTemplateEngine.js';
@@ -30,6 +31,7 @@ export interface RuntimeGeneratorOptions {
   templateEngine?: RuntimeTemplateEngine;
   fileDefinitions?: RuntimeFileDefinition[];
   now?: () => Date;
+  verifier?: GeneratedFileVerifier;
 }
 
 export interface RuntimeGeneratorService {
@@ -43,11 +45,13 @@ export class RuntimeGenerator implements RuntimeGeneratorService {
   private readonly templateEngine: RuntimeTemplateEngine;
   private readonly fileDefinitions: RuntimeFileDefinition[];
   private readonly now: () => Date;
+  private readonly verifier: GeneratedFileVerifier;
 
   constructor(options: RuntimeGeneratorOptions = {}) {
     this.templateEngine = options.templateEngine ?? new RuntimeTemplateEngine();
     this.fileDefinitions = options.fileDefinitions ?? RUNTIME_FILE_DEFINITIONS;
     this.now = options.now ?? (() => new Date());
+    this.verifier = options.verifier ?? new GeneratedFileVerifier();
   }
 
   async generate(context: RuntimeContext): Promise<RuntimeResult> {
@@ -64,7 +68,18 @@ export class RuntimeGenerator implements RuntimeGeneratorService {
       }
 
       await mkdir(dirname(absolutePath), { recursive: true });
-      await writeFile(absolutePath, `${content}\n`, 'utf8');
+      const diskContent = `${content}\n`;
+      await writeFile(absolutePath, diskContent, 'utf8');
+
+      await this.verifier.verifyWrittenFile(
+        workspaceRoot,
+        {
+          relativePath: definition.outputPath,
+          absolutePath,
+          content: diskContent,
+        },
+        'RuntimeGenerator',
+      );
 
       const fileName = definition.outputPath.split('/').pop() ?? definition.outputPath;
 
