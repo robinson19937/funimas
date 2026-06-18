@@ -1,11 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { CliApp } from '../src/cli/cli.js';
 
 describe('CliApp', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  });
+
   it('ejecuta el comando protect con una ruta de proyecto', async () => {
+    const projectDir = await mkdtemp(join(tmpdir(), 'funimas-cli-'));
+    tempDirs.push(projectDir);
+    await writeFile(join(projectDir, 'package.json'), '{}', 'utf8');
+
     const app = new CliApp({
-      argv: ['node', 'funimas', 'protect', '/tmp/mi-proyecto'],
+      argv: ['node', 'funimas', 'protect', projectDir],
     });
 
     const exitCode = await app.run();

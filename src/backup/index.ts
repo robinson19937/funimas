@@ -1,5 +1,11 @@
-/**
- * Módulo de respaldo.
- * Reservado para la lógica de copias de seguridad en etapas futuras.
- */
-export {};
+export { BackupEngine, type BackupEngineOptions, type BackupService } from './BackupEngine.js';
+export { BackupResult, type BackupResultData } from './BackupResult.js';
+export {
+  BackupError,
+  EXCLUDED_ENTRIES,
+  assertProjectDirectoryExists,
+  copyProjectContents,
+  formatBackupTimestamp,
+  getRelativeBackupPath,
+  isExcludedEntry,
+} from './BackupUtils.js';
