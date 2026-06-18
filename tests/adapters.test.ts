@@ -95,6 +95,21 @@ describe('AdapterRegistry', () => {
 
     expect(detection.detected).toBe(false);
     expect(detection.adapter).toBeUndefined();
+    expect(detection.attempts.length).toBe(3);
+    expect(detection.attempts.every((attempt) => !attempt.detected)).toBe(true);
+  });
+
+  it('expone el motivo de cada adaptador evaluado', async () => {
+    const registry = createDefaultAdapterRegistry();
+    const context = new AdapterContext({
+      projectPath: join(fixturesDir, 'plain-project'),
+    });
+
+    const detection = await registry.detect(context);
+    const netlifyAttempt = detection.attempts.find((attempt) => attempt.adapterId === 'netlify');
+
+    expect(netlifyAttempt?.reason).toContain('netlify.toml');
+    expect(netlifyAttempt?.searchedPaths?.length).toBeGreaterThan(0);
   });
 
   it('prioriza el primer adaptador que detecta la plataforma', async () => {
@@ -172,7 +187,20 @@ describe('NetlifyAdapter', () => {
     expect(functions.data.functions).toEqual([]);
   });
 
-  it('usa workspacePath como ruta de detección cuando está disponible', async () => {
+  it('detecta Netlify desde projectPath cuando el workspace no contiene el marcador', async () => {
+    const adapter = new NetlifyAdapter();
+    const context = new AdapterContext({
+      projectPath: join(fixturesDir, 'netlify-project'),
+      workspacePath: join(fixturesDir, 'plain-project'),
+    });
+
+    const detection = await adapter.detect(context);
+
+    expect(detection.detected).toBe(true);
+    expect(detection.foundAt).toContain('netlify.toml');
+  });
+
+  it('usa workspacePath como primera ruta de detección cuando está disponible', async () => {
     const adapter = new NetlifyAdapter();
     const context = new AdapterContext({
       projectPath: join(fixturesDir, 'plain-project'),

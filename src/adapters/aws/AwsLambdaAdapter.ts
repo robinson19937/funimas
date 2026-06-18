@@ -1,8 +1,6 @@
-import { join } from 'node:path';
-
 import { AdapterCapabilities } from '../AdapterCapabilities.js';
 import type { AdapterContext } from '../AdapterContext.js';
-import { pathExists } from '../adapter-path.js';
+import { detectPlatformMarkers } from '../adapter-path.js';
 import type { AdapterDetectionResult } from '../AdapterResult.js';
 import { BasePlatformAdapter } from '../PlatformAdapter.js';
 
@@ -20,19 +18,14 @@ export class AwsLambdaAdapter extends BasePlatformAdapter {
   });
 
   async detect(context: AdapterContext): Promise<AdapterDetectionResult> {
-    const targetPath = context.getTargetPath();
+    const detection = await detectPlatformMarkers(context, AWS_MARKERS);
 
-    for (const marker of AWS_MARKERS) {
-      const markerPath = join(targetPath, marker);
-
-      if (await pathExists(markerPath)) {
-        return {
-          detected: true,
-          marker,
-        };
-      }
-    }
-
-    return { detected: false };
+    return {
+      detected: detection.detected,
+      marker: detection.marker,
+      foundAt: detection.foundAt,
+      searchedPaths: detection.searchedPaths,
+      reason: detection.reason,
+    };
   }
 }

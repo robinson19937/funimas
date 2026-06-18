@@ -4,9 +4,20 @@ import { NetlifyAdapter } from './netlify/NetlifyAdapter.js';
 import type { PlatformAdapter } from './PlatformAdapter.js';
 import { VercelAdapter } from './vercel/VercelAdapter.js';
 
+export interface AdapterDetectionAttempt {
+  adapterId: string;
+  adapterName: string;
+  detected: boolean;
+  marker?: string;
+  foundAt?: string;
+  searchedPaths?: string[];
+  reason?: string;
+}
+
 export interface AdapterRegistryDetectionResult {
   adapter?: PlatformAdapter;
   detected: boolean;
+  attempts: AdapterDetectionAttempt[];
 }
 
 export interface AdapterRegistryService {
@@ -42,19 +53,35 @@ export class AdapterRegistry implements AdapterRegistryService {
   }
 
   async detect(context: AdapterContext): Promise<AdapterRegistryDetectionResult> {
+    const attempts: AdapterDetectionAttempt[] = [];
+
     for (const adapter of this.adapters) {
       const detection = await adapter.detect(context);
+
+      attempts.push({
+        adapterId: adapter.id,
+        adapterName: adapter.name,
+        detected: detection.detected,
+        marker: detection.marker,
+        foundAt: detection.foundAt,
+        searchedPaths: detection.searchedPaths,
+        reason: detection.detected
+          ? undefined
+          : (detection.reason ?? `Marcador de plataforma no encontrado para ${adapter.name}`),
+      });
 
       if (detection.detected) {
         return {
           adapter,
           detected: true,
+          attempts,
         };
       }
     }
 
     return {
       detected: false,
+      attempts,
     };
   }
 }

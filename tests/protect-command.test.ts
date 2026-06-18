@@ -224,6 +224,15 @@ describe('ProtectCommand', () => {
       detect: vi.fn().mockResolvedValue({
         detected: true,
         adapter: new NetlifyAdapter(),
+        attempts: [
+          {
+            adapterId: 'netlify',
+            adapterName: 'Netlify',
+            detected: true,
+            marker: 'netlify.toml',
+            foundAt: '/tmp/mi-proyecto_funimas/netlify.toml',
+          },
+        ],
       }),
     };
     const backendRuntimeGenerator: RuntimeGeneratorService = {

@@ -9,6 +9,7 @@ export { AdapterContext, type AdapterContextData } from './AdapterContext.js';
 export {
   AdapterRegistry,
   createDefaultAdapterRegistry,
+  type AdapterDetectionAttempt,
   type AdapterRegistryDetectionResult,
   type AdapterRegistryService,
 } from './AdapterRegistry.js';
