@@ -185,19 +185,18 @@ export class ProtectPipeline {
     let generationError: GenerationVerificationError | undefined;
 
     try {
-      if (adapterDetection.adapter) {
-        await this.runGenerationPhase({
-          adapter: adapterDetection.adapter,
-          generatorContext: new GeneratorContext({
-            projectPath: this.projectPath,
-            workspacePath: workspaceResult.workspaceProject,
-            semanticResult,
-            adapter: adapterDetection.adapter,
-          }),
+      await this.runGenerationPhase({
+        adapter: adapterDetection.adapter,
+        adapterDetection,
+        generatorContext: new GeneratorContext({
+          projectPath: this.projectPath,
           workspacePath: workspaceResult.workspaceProject,
-          history,
-        });
-      }
+          semanticResult,
+          adapter: adapterDetection.adapter,
+        }),
+        workspacePath: workspaceResult.workspaceProject,
+        history,
+      });
     } catch (error) {
       if (error instanceof GenerationVerificationError) {
         generationError = error;
@@ -533,14 +532,39 @@ export class ProtectPipeline {
   }
 
   private printAdapterSummary(detection: AdapterRegistryDetectionResult): void {
+    const attempts = detection.attempts ?? [];
+
     if (!detection.adapter) {
       this.output.writeln('✔ Plataforma no detectada');
+      this.output.writeln();
+      this.output.writeln('Motivo:');
+      this.output.writeln();
+
+      for (const attempt of attempts) {
+        this.output.writeln(`- ${attempt.adapterName}: ${attempt.reason ?? 'sin coincidencias'}`);
+        this.output.writeln();
+      }
+
+      this.output.writeln('Se continuará generando Runtime y SDK.');
       this.output.writeln();
       return;
     }
 
+    const successfulAttempt = attempts.find((attempt) => attempt.detected);
+
     this.output.writeln(`✔ ${detection.adapter.name}`);
     this.output.writeln();
+
+    if (successfulAttempt?.marker) {
+      this.output.writeln(`Marcador: ${successfulAttempt.marker}`);
+      this.output.writeln();
+    }
+
+    if (successfulAttempt?.foundAt) {
+      this.output.writeln(`Ubicación: ${successfulAttempt.foundAt}`);
+      this.output.writeln();
+    }
+
     this.output.writeln('Capabilities');
     this.output.writeln();
 
@@ -587,12 +611,32 @@ export class ProtectPipeline {
   }
 
   private async runGenerationPhase(options: {
-    adapter: PlatformAdapter;
+    adapter?: PlatformAdapter;
+    adapterDetection: AdapterRegistryDetectionResult;
     generatorContext: GeneratorContext;
     workspacePath: string;
     history: TransformationHistory;
   }): Promise<void> {
-    const { adapter, generatorContext, workspacePath, history } = options;
+    const { adapter, adapterDetection, generatorContext, workspacePath, history } = options;
+
+    this.output.writeln('Plan de generación:');
+    this.output.writeln();
+    this.output.writeln('✔ WorkspaceConfigGenerator — siempre');
+    this.output.writeln();
+    this.output.writeln('✔ RuntimeGenerator — siempre');
+    this.output.writeln();
+    this.output.writeln('✔ SDKGenerator — siempre');
+    this.output.writeln();
+
+    const functionSkipReason = this.getFunctionGenerationSkipReason(adapter, generatorContext);
+
+    if (functionSkipReason) {
+      this.output.writeln(`⊘ FunctionGenerator — omitido (${functionSkipReason})`);
+      this.output.writeln();
+    } else {
+      this.output.writeln('✔ FunctionGenerator — plataforma compatible');
+      this.output.writeln();
+    }
 
     this.output.writeln('Preparando configuración del workspace...');
     this.output.writeln();
@@ -605,6 +649,108 @@ export class ProtectPipeline {
     this.output.writeln();
     this.output.writeln('✔ package.json');
     this.output.writeln();
+
+    if (!functionSkipReason) {
+      await this.generateFunctions({
+        adapter: adapter!,
+        generatorContext,
+        workspacePath,
+        history,
+      });
+    }
+
+    this.output.writeln('Generando Runtime...');
+    this.output.writeln();
+
+    const runtimeResult = await this.backendRuntimeGenerator.generate(
+      new RuntimeContext({
+        projectPath: this.projectPath,
+        workspacePath,
+        history,
+      }),
+    );
+
+    await this.generatedFileVerifier.verifyPaths(
+      workspacePath,
+      runtimeResult.generatedFiles.map((file) => file.relativePath),
+      'RuntimeGenerator',
+    );
+
+    for (const generatedFile of runtimeResult.generatedFiles) {
+      this.output.writeln(`✔ ${generatedFile.fileName}`);
+      this.output.writeln();
+    }
+
+    this.output.writeln('Generando SDK...');
+    this.output.writeln();
+
+    const sdkResult = await this.sdkGenerator.generate(generatorContext);
+
+    await this.generatedFileVerifier.verifyWrittenFiles(
+      workspacePath,
+      sdkResult.files,
+      'SDKGenerator',
+    );
+
+    this.output.writeln('✔ SDK');
+    this.output.writeln();
+
+    for (const generatedFile of sdkResult.files) {
+      await history.record({
+        file: generatedFile.absolutePath,
+        operation: 'GENERATE_SDK',
+        rewriteRule: 'SDKGenerator',
+        before: '',
+        after: generatedFile.content,
+        generatedFiles: [generatedFile.relativePath],
+        modifiedImports: [],
+        status: 'COMPLETED',
+        reason: 'El SDK centraliza el acceso a operaciones protegidas desde el cliente.',
+        benefit: TransformationBenefit.forOperation('DATABASE_INSERT', 'addDoc'),
+        riskLevel: 'LOW',
+        generatedBy: 'SDKGenerator',
+        templateUsed: 'src/generator/templates/sdk/index.ts',
+        compilerVersion: VERSION,
+      });
+    }
+
+    if (!adapterDetection.detected) {
+      this.output.writeln('Nota: Runtime y SDK generados sin plataforma detectada.');
+      this.output.writeln();
+    }
+  }
+
+  private getFunctionGenerationSkipReason(
+    adapter: PlatformAdapter | undefined,
+    generatorContext: GeneratorContext,
+  ): string | undefined {
+    if (!adapter) {
+      return 'plataforma no detectada';
+    }
+
+    if (!adapter.supports('functions')) {
+      return `${adapter.name} no soporta functions`;
+    }
+
+    const plannerContext = new PlannerContext(generatorContext.semanticResult);
+    const hasSupportedOperations = plannerContext
+      .getTransformableOperations()
+      .some((operation) => isSupportedFunctionOperation(operation.type));
+
+    if (!hasSupportedOperations) {
+      return 'sin operaciones compatibles para functions';
+    }
+
+    return undefined;
+  }
+
+  private async generateFunctions(options: {
+    adapter: PlatformAdapter;
+    generatorContext: GeneratorContext;
+    workspacePath: string;
+    history: TransformationHistory;
+  }): Promise<void> {
+    const { adapter, generatorContext, workspacePath, history } = options;
 
     this.output.writeln('Generando Functions...');
     this.output.writeln();
@@ -714,61 +860,6 @@ export class ProtectPipeline {
           });
         }
       }
-    }
-
-    this.output.writeln('Generando Runtime...');
-    this.output.writeln();
-
-    const runtimeResult = await this.backendRuntimeGenerator.generate(
-      new RuntimeContext({
-        projectPath: this.projectPath,
-        workspacePath,
-        history,
-      }),
-    );
-
-    await this.generatedFileVerifier.verifyPaths(
-      workspacePath,
-      runtimeResult.generatedFiles.map((file) => file.relativePath),
-      'RuntimeGenerator',
-    );
-
-    for (const generatedFile of runtimeResult.generatedFiles) {
-      this.output.writeln(`✔ ${generatedFile.fileName}`);
-      this.output.writeln();
-    }
-
-    this.output.writeln('Generando SDK...');
-    this.output.writeln();
-
-    const sdkResult = await this.sdkGenerator.generate(generatorContext);
-
-    await this.generatedFileVerifier.verifyWrittenFiles(
-      workspacePath,
-      sdkResult.files,
-      'SDKGenerator',
-    );
-
-    this.output.writeln('✔ SDK');
-    this.output.writeln();
-
-    for (const generatedFile of sdkResult.files) {
-      await history.record({
-        file: generatedFile.absolutePath,
-        operation: 'GENERATE_SDK',
-        rewriteRule: 'SDKGenerator',
-        before: '',
-        after: generatedFile.content,
-        generatedFiles: [generatedFile.relativePath],
-        modifiedImports: [],
-        status: 'COMPLETED',
-        reason: 'El SDK centraliza el acceso a operaciones protegidas desde el cliente.',
-        benefit: TransformationBenefit.forOperation('DATABASE_INSERT', 'addDoc'),
-        riskLevel: 'LOW',
-        generatedBy: 'SDKGenerator',
-        templateUsed: 'src/generator/templates/sdk/index.ts',
-        compilerVersion: VERSION,
-      });
     }
   }
 

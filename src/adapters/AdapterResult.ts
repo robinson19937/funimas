@@ -3,6 +3,9 @@ import type { GeneratedFile } from './GeneratedFile.js';
 export interface AdapterDetectionResult {
   detected: boolean;
   marker?: string;
+  foundAt?: string;
+  searchedPaths?: string[];
+  reason?: string;
 }
 
 export interface AdapterRuntimeArtifact {

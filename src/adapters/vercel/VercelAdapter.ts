@@ -1,8 +1,6 @@
-import { join } from 'node:path';
-
 import { AdapterCapabilities } from '../AdapterCapabilities.js';
 import type { AdapterContext } from '../AdapterContext.js';
-import { pathExists } from '../adapter-path.js';
+import { detectPlatformMarker } from '../adapter-path.js';
 import type { AdapterDetectionResult } from '../AdapterResult.js';
 import { BasePlatformAdapter } from '../PlatformAdapter.js';
 
@@ -20,12 +18,14 @@ export class VercelAdapter extends BasePlatformAdapter {
   });
 
   async detect(context: AdapterContext): Promise<AdapterDetectionResult> {
-    const markerPath = join(context.getTargetPath(), VERCEL_MARKER);
-    const detected = await pathExists(markerPath);
+    const detection = await detectPlatformMarker(context, VERCEL_MARKER);
 
     return {
-      detected,
-      marker: detected ? VERCEL_MARKER : undefined,
+      detected: detection.detected,
+      marker: detection.detected ? VERCEL_MARKER : undefined,
+      foundAt: detection.foundAt,
+      searchedPaths: detection.searchedPaths,
+      reason: detection.reason,
     };
   }
 }

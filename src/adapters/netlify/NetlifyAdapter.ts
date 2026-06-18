@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { AdapterCapabilities } from '../AdapterCapabilities.js';
 import type { AdapterContext } from '../AdapterContext.js';
 import type { GeneratedFile } from '../GeneratedFile.js';
-import { pathExists } from '../adapter-path.js';
+import { detectPlatformMarker } from '../adapter-path.js';
 import type {
   AdapterDetectionResult,
   AdapterFunctionArtifact,
@@ -48,12 +48,14 @@ export class NetlifyAdapter extends BasePlatformAdapter {
   }
 
   async detect(context: AdapterContext): Promise<AdapterDetectionResult> {
-    const markerPath = join(context.getTargetPath(), NETLIFY_MARKER);
-    const detected = await pathExists(markerPath);
+    const detection = await detectPlatformMarker(context, NETLIFY_MARKER);
 
     return {
-      detected,
-      marker: detected ? NETLIFY_MARKER : undefined,
+      detected: detection.detected,
+      marker: detection.detected ? NETLIFY_MARKER : undefined,
+      foundAt: detection.foundAt,
+      searchedPaths: detection.searchedPaths,
+      reason: detection.reason,
     };
   }
 
