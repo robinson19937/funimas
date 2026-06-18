@@ -21,7 +21,7 @@ import {
 } from '../../generator/index.js';
 import { DatabaseInsertFunctionGenerator } from '../../generator/functions/DatabaseInsertFunctionGenerator.js';
 import { TransformationHistory } from '../../history/index.js';
-import { ChangeReportGenerator } from '../../report/index.js';
+import { ChangeReportGenerator, ValidationReportGenerator } from '../../report/index.js';
 import { TransformationBenefit } from '../../report/TransformationBenefit.js';
 import { TransformationReason } from '../../report/TransformationReason.js';
 import { RuntimeGenerator, RuntimeContext, type RuntimeGeneratorService } from '../../runtime/index.js';
@@ -41,6 +41,9 @@ import { ConsoleOutputWriter, NullOutputWriter, type OutputWriter } from '../../
 import { VERSION } from '../../utils/version.js';
 import { WorkspaceEngine, type WorkspaceService } from '../../workspace/index.js';
 import type { WorkspaceResult } from '../../workspace/WorkspaceResult.js';
+import { ValidationEngine, ValidationContext, type ValidationEngineService } from '../../validation/index.js';
+import type { ValidationResult } from '../../validation/ValidationResult.js';
+import { RollbackManager, RollbackContext, type RollbackManagerService } from '../../rollback/index.js';
 
 export interface ProtectCommandOptions {
   projectPath: string;
@@ -58,6 +61,9 @@ export interface ProtectCommandOptions {
   codeRewriter?: CodeRewriterService;
   backendRuntimeGenerator?: RuntimeGeneratorService;
   changeReportGenerator?: ChangeReportGenerator;
+  validationReportGenerator?: ValidationReportGenerator;
+  validationEngine?: ValidationEngineService;
+  rollbackManager?: RollbackManagerService;
   databaseInsertFunctionGenerator?: DatabaseInsertFunctionGenerator;
 }
 
@@ -77,6 +83,9 @@ export class ProtectCommand {
   private readonly codeRewriter: CodeRewriterService;
   private readonly backendRuntimeGenerator: RuntimeGeneratorService;
   private readonly changeReportGenerator: ChangeReportGenerator;
+  private readonly validationReportGenerator: ValidationReportGenerator;
+  private readonly validationEngine: ValidationEngineService;
+  private readonly rollbackManager: RollbackManagerService;
   private readonly databaseInsertFunctionGenerator: DatabaseInsertFunctionGenerator;
   private readonly executionId: string;
 
@@ -97,6 +106,10 @@ export class ProtectCommand {
     this.codeRewriter = options.codeRewriter ?? new CodeRewriter();
     this.backendRuntimeGenerator = options.backendRuntimeGenerator ?? new RuntimeGenerator();
     this.changeReportGenerator = options.changeReportGenerator ?? new ChangeReportGenerator();
+    this.validationReportGenerator =
+      options.validationReportGenerator ?? new ValidationReportGenerator();
+    this.validationEngine = options.validationEngine ?? new ValidationEngine();
+    this.rollbackManager = options.rollbackManager ?? new RollbackManager();
     this.databaseInsertFunctionGenerator =
       options.databaseInsertFunctionGenerator ?? new DatabaseInsertFunctionGenerator();
     this.executionId = randomUUID();
@@ -319,6 +332,83 @@ export class ProtectCommand {
     this.output.writeln(`✔ ${history.getRecordCount()} transformaciones registradas`);
     this.output.writeln();
 
+    this.output.writeln('Validando Workspace...');
+    this.output.writeln();
+
+    const validationContext = new ValidationContext({
+      projectPath: this.projectPath,
+      workspacePath: workspaceResult.workspaceProject,
+      history,
+      semanticResult,
+    });
+
+    let validationResult = await this.validationEngine.validateContext(validationContext);
+    const rollbackResults = [];
+
+    this.printValidationSummary(validationResult);
+
+    if (!validationResult.valid && validationResult.failedTransformationIds.length > 0) {
+      this.output.writeln('Errores encontrados:');
+      this.output.writeln();
+
+      for (const error of validationResult.errors) {
+        this.output.writeln(`- ${error.message}`);
+        this.output.writeln();
+      }
+
+      const rollbackContext = new RollbackContext({
+        workspacePath: workspaceResult.workspaceProject,
+        history,
+        reason: 'Validación fallida',
+      });
+
+      for (const transformationId of validationResult.failedTransformationIds) {
+        const rollbackResult = await this.rollbackManager.rollback(
+          transformationId,
+          rollbackContext,
+        );
+        rollbackResults.push(rollbackResult);
+
+        await history.updateRecord(transformationId, {
+          validationStatus: 'FAILED',
+          validationErrors: validationResult.errors
+            .filter((error) => error.transformationId === transformationId)
+            .map((error) => error.message),
+        });
+      }
+
+      this.output.writeln('Rollback ejecutado correctamente.');
+      this.output.writeln();
+
+      validationResult = await this.validationEngine.validateContext(validationContext);
+    } else if (validationResult.valid) {
+      for (const record of history.getRecords()) {
+        await history.updateRecord(record.id, {
+          validationStatus: 'PASSED',
+          executionTime: validationResult.duration,
+        });
+      }
+    }
+
+    this.output.writeln('Actualizando reporte de validación...');
+    this.output.writeln();
+
+    const validationFinishedAt = new Date();
+    await this.validationReportGenerator.generate(
+      workspaceResult.workspaceProject,
+      validationResult,
+      rollbackResults,
+      this.executionId,
+      validationFinishedAt,
+    );
+
+    this.output.writeln('✔ validation.md');
+    this.output.writeln();
+    this.output.writeln('✔ validation.html');
+    this.output.writeln();
+    this.output.writeln('✔ validation.json');
+    this.output.writeln();
+
     this.output.writeln('Actualizando reporte...');
     this.output.writeln();
 
@@ -479,6 +569,38 @@ export class ProtectCommand {
         this.output.writeln();
       }
     }
+  }
+
+  private printValidationSummary(validationResult: ValidationResult): void {
+    const ruleLabels: Record<string, string> = {
+      'typescript-compilation': 'TypeScript',
+      'missing-imports': 'Imports',
+      'runtime-structure': 'Runtime',
+      'sdk-structure': 'SDK',
+      'generated-files': 'Functions',
+      'missing-files': 'Missing Files',
+    };
+
+    for (const ruleResult of validationResult.ruleResults) {
+      const label = ruleLabels[ruleResult.ruleId] ?? ruleResult.ruleName;
+
+      if (ruleResult.passed) {
+        this.output.writeln(`✔ ${label}`);
+        this.output.writeln();
+      }
+    }
+
+    this.output.writeln('Resultado:');
+    this.output.writeln();
+
+    if (validationResult.valid) {
+      this.output.writeln('Sin errores');
+      this.output.writeln();
+      return;
+    }
+
+    this.output.writeln('Errores encontrados');
+    this.output.writeln();
   }
 
   private printRewriteSummary(rewriteResult: RewriteResult): void {

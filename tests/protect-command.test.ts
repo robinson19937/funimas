@@ -399,6 +399,9 @@ describe('ProtectCommand', () => {
     expect(output.lines).toContain('DATABASE_INSERT: 1');
     expect(codeRewriter.rewrite).toHaveBeenCalledOnce();
     expect(output.lines).toContain('Registrando transformaciones...');
+    expect(output.lines).toContain('Validando Workspace...');
+    expect(output.lines).toContain('Actualizando reporte de validación...');
+    expect(output.lines).toContain('✔ validation.md');
     expect(output.lines).toContain('Actualizando reporte...');
     expect(output.lines).toContain('✔ changes.md');
     expect(output.lines).toContain('✔ summary.json');

@@ -1,0 +1,53 @@
+# Funimas Validation Report
+
+Versión: {{funimasVersion}}
+
+**Resultado:** {{#if summary.valid}}Sin errores{{else}}Errores encontrados{{/if}}
+
+**Duración:** {{summary.duration}}ms
+
+**Fecha:** {{summary.date}}
+
+---
+
+{{#each ruleResults}}
+## {{ruleName}}
+
+**Regla:** {{ruleId}}
+
+**Resultado:** {{#if passed}}✔ PASSED{{else}}✗ FAILED{{/if}}
+
+**Tiempo:** {{duration}}ms
+
+**Archivos evaluados:**
+
+{{#each filesEvaluated}}
+- {{this}}
+{{/each}}
+
+{{#unless passed}}
+**Errores:**
+
+{{#each errors}}
+- {{message}}
+{{#if transformationId}}
+  - Transformación: {{transformationId}}
+{{/if}}
+{{/each}}
+{{/unless}}
+
+{{#if rolledBack}}
+**Transformaciones revertidas:** sí
+{{/if}}
+
+---
+
+{{/each}}
+
+{{#if rollbackResults.length}}
+## Rollback
+
+{{#each rollbackResults}}
+- Transformación `{{transformationId}}`: {{#if success}}ejecutado correctamente{{else}}falló{{/if}}
+{{/each}}
+{{/if}}

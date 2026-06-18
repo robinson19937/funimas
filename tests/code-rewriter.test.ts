@@ -132,7 +132,9 @@ describe('DatabaseInsertRewriteRule', () => {
 });
 
 describe('ProtectCommand + CodeRewriter integration', () => {
-  it('reescribe el workspace del ejemplo react-firebase-crud sin tocar el original', async () => {
+  it(
+    'reescribe el workspace del ejemplo react-firebase-crud sin tocar el original',
+    async () => {
     const projectDir = reactFirebaseCrudPath;
     const originalApp = await readFile(join(projectDir, 'src/App.tsx'), 'utf8');
 
@@ -180,6 +182,17 @@ describe('ProtectCommand + CodeRewriter integration', () => {
         expect.arrayContaining(['runtime/handler.ts', 'netlify/functions/database_insert.ts']),
       );
 
+      const validationMarkdown = await readFile(
+        join(workspacePath, '.funimas/reports/validation.md'),
+        'utf8',
+      );
+      const validationJson = JSON.parse(
+        await readFile(join(workspacePath, '.funimas/reports/validation.json'), 'utf8'),
+      ) as Record<string, unknown>;
+
+      expect(validationMarkdown).toContain('Validation Report');
+      expect(validationJson.valid).toBe(true);
+
       await expect(
         execFileAsync('npx', ['tsc', '-p', workspacePath], {
           cwd: workspacePath,
@@ -189,5 +202,7 @@ describe('ProtectCommand + CodeRewriter integration', () => {
       await rm(workspacePath, { recursive: true, force: true });
       await rm(join(projectDir, '.funimas'), { recursive: true, force: true });
     }
-  });
+  },
+    15000,
+  );
 });

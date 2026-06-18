@@ -13,6 +13,8 @@ export default defineConfig({
         'src/history/**/*.ts',
         'src/report/**/*.ts',
         'src/generator/functions/**/*.ts',
+        'src/validation/**/*.ts',
+        'src/rollback/**/*.ts',
       ],
       thresholds: {
         lines: 90,

@@ -191,6 +191,8 @@ describe('TransformationRecord', () => {
     expect(record.generatedFiles).toEqual([]);
     expect(record.modifiedImports).toEqual([]);
     expect(record.status).toBe('COMPLETED');
+    expect(record.validationStatus).toBe('PENDING');
+    expect(record.rollbackExecuted).toBe(false);
   });
 });
 

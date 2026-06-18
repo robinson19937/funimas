@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Funimas Validation Report</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.5; }
+      .passed { color: #080; }
+      .failed { color: #c00; }
+      .rule { margin-bottom: 1.5rem; border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }
+      details { margin: 0.5rem 0; }
+      summary { cursor: pointer; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>Funimas Validation Report</h1>
+    <p>Versión: {{funimasVersion}}</p>
+    <p>
+      <strong>Resultado:</strong>
+      {{#if summary.valid}}
+      <span class="passed">Sin errores</span>
+      {{else}}
+      <span class="failed">Errores encontrados</span>
+      {{/if}}
+    </p>
+
+    {{#each ruleResults}}
+    <article class="rule">
+      <h2>{{ruleName}}</h2>
+      <p>
+        <strong>Regla:</strong> {{ruleId}} |
+        <strong>Resultado:</strong>
+        {{#if passed}}<span class="passed">PASSED</span>{{else}}<span class="failed">FAILED</span>{{/if}} |
+        <strong>Tiempo:</strong> {{duration}}ms
+      </p>
+
+      <details>
+        <summary>Archivos evaluados</summary>
+        <ul>
+          {{#each filesEvaluated}}
+          <li>{{this}}</li>
+          {{/each}}
+        </ul>
+      </details>
+
+      {{#unless passed}}
+      <details open>
+        <summary>Errores encontrados</summary>
+        <ul>
+          {{#each errors}}
+          <li>
+            {{message}}
+            {{#if transformationId}}<br /><small>Transformación: {{transformationId}}</small>{{/if}}
+          </li>
+          {{/each}}
+        </ul>
+      </details>
+      {{/unless}}
+
+      {{#if rolledBack}}
+      <p><strong>Transformaciones revertidas:</strong> sí</p>
+      {{/if}}
+    </article>
+    {{/each}}
+
+    {{#if rollbackResults.length}}
+    <section>
+      <h2>Rollback</h2>
+      <ul>
+        {{#each rollbackResults}}
+        <li>
+          Transformación <code>{{transformationId}}</code>:
+          {{#if success}}Rollback ejecutado correctamente{{else}}Rollback falló{{/if}}
+        </li>
+        {{/each}}
+      </ul>
+    </section>
+    {{/if}}
+  </body>
+</html>

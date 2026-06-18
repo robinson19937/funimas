@@ -7,6 +7,10 @@ export const TRANSFORMATION_STATUSES = ['PENDING', 'COMPLETED', 'FAILED'] as con
 
 export type TransformationStatus = (typeof TRANSFORMATION_STATUSES)[number];
 
+export const VALIDATION_STATUSES = ['PENDING', 'PASSED', 'FAILED', 'SKIPPED'] as const;
+
+export type ValidationStatus = (typeof VALIDATION_STATUSES)[number];
+
 export interface TransformationRecordData {
   id?: string;
   timestamp?: Date;
@@ -25,6 +29,11 @@ export interface TransformationRecordData {
   generatedAt?: string;
   templateUsed?: string;
   compilerVersion?: string;
+  validationStatus?: ValidationStatus;
+  rollbackExecuted?: boolean;
+  rollbackReason?: string;
+  validationErrors?: string[];
+  executionTime?: number;
 }
 
 export class TransformationRecord {
@@ -45,6 +54,11 @@ export class TransformationRecord {
   readonly generatedAt: string;
   readonly templateUsed: string;
   readonly compilerVersion: string;
+  readonly validationStatus: ValidationStatus;
+  readonly rollbackExecuted: boolean;
+  readonly rollbackReason: string;
+  readonly validationErrors: string[];
+  readonly executionTime: number;
 
   constructor(data: TransformationRecordData) {
     this.id = data.id ?? randomUUID();
@@ -64,6 +78,11 @@ export class TransformationRecord {
     this.generatedAt = data.generatedAt ?? this.timestamp.toISOString();
     this.templateUsed = data.templateUsed ?? '';
     this.compilerVersion = data.compilerVersion ?? VERSION;
+    this.validationStatus = data.validationStatus ?? 'PENDING';
+    this.rollbackExecuted = data.rollbackExecuted ?? false;
+    this.rollbackReason = data.rollbackReason ?? '';
+    this.validationErrors = data.validationErrors ?? [];
+    this.executionTime = data.executionTime ?? 0;
   }
 
   toJSON(): Record<string, unknown> {
@@ -85,6 +104,11 @@ export class TransformationRecord {
       generatedAt: this.generatedAt,
       templateUsed: this.templateUsed,
       compilerVersion: this.compilerVersion,
+      validationStatus: this.validationStatus,
+      rollbackExecuted: this.rollbackExecuted,
+      rollbackReason: this.rollbackReason,
+      validationErrors: this.validationErrors,
+      executionTime: this.executionTime,
     };
   }
 
@@ -111,6 +135,42 @@ export class TransformationRecord {
       generatedAt: data.generatedAt ? String(data.generatedAt) : undefined,
       templateUsed: data.templateUsed ? String(data.templateUsed) : undefined,
       compilerVersion: data.compilerVersion ? String(data.compilerVersion) : undefined,
+      validationStatus: data.validationStatus
+        ? (String(data.validationStatus) as ValidationStatus)
+        : undefined,
+      rollbackExecuted: data.rollbackExecuted ? Boolean(data.rollbackExecuted) : undefined,
+      rollbackReason: data.rollbackReason ? String(data.rollbackReason) : undefined,
+      validationErrors: Array.isArray(data.validationErrors)
+        ? data.validationErrors.map(String)
+        : undefined,
+      executionTime: typeof data.executionTime === 'number' ? data.executionTime : undefined,
+    });
+  }
+
+  withUpdates(updates: Partial<TransformationRecordData>): TransformationRecord {
+    return new TransformationRecord({
+      id: this.id,
+      timestamp: this.timestamp,
+      file: updates.file ?? this.file,
+      operation: updates.operation ?? this.operation,
+      rewriteRule: updates.rewriteRule ?? this.rewriteRule,
+      before: updates.before ?? this.before,
+      after: updates.after ?? this.after,
+      generatedFiles: updates.generatedFiles ?? this.generatedFiles,
+      modifiedImports: updates.modifiedImports ?? this.modifiedImports,
+      status: updates.status ?? this.status,
+      reason: updates.reason ?? this.reason,
+      benefit: updates.benefit ?? this.benefit,
+      riskLevel: updates.riskLevel ?? this.riskLevel,
+      generatedBy: updates.generatedBy ?? this.generatedBy,
+      generatedAt: updates.generatedAt ?? this.generatedAt,
+      templateUsed: updates.templateUsed ?? this.templateUsed,
+      compilerVersion: updates.compilerVersion ?? this.compilerVersion,
+      validationStatus: updates.validationStatus ?? this.validationStatus,
+      rollbackExecuted: updates.rollbackExecuted ?? this.rollbackExecuted,
+      rollbackReason: updates.rollbackReason ?? this.rollbackReason,
+      validationErrors: updates.validationErrors ?? this.validationErrors,
+      executionTime: updates.executionTime ?? this.executionTime,
     });
   }
 }
