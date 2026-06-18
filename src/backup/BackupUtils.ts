@@ -1,25 +1,38 @@
-import { copyFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export const EXCLUDED_ENTRIES = [
-  'node_modules',
-  '.git',
-  '.funimas',
-  'dist',
-  'coverage',
-] as const;
+import {
+  ProjectFsError,
+  assertProjectDirectoryExists as assertProjectDirectoryExistsBase,
+  copyProjectContents,
+  ensureDirectory,
+  EXCLUDED_ENTRIES,
+  isExcludedEntry,
+} from '../utils/project-fs.js';
 
-export type ExcludedEntry = (typeof EXCLUDED_ENTRIES)[number];
+export {
+  EXCLUDED_ENTRIES,
+  copyProjectContents,
+  ensureDirectory,
+  isExcludedEntry,
+};
 
-export class BackupError extends Error {
+export class BackupError extends ProjectFsError {
   constructor(message: string) {
     super(message);
     this.name = 'BackupError';
   }
 }
 
-export function isExcludedEntry(name: string): name is ExcludedEntry {
-  return (EXCLUDED_ENTRIES as readonly string[]).includes(name);
+export async function assertProjectDirectoryExists(projectPath: string): Promise<void> {
+  try {
+    await assertProjectDirectoryExistsBase(projectPath);
+  } catch (error) {
+    if (error instanceof ProjectFsError) {
+      throw new BackupError(error.message);
+    }
+
+    throw error;
+  }
 }
 
 export function formatBackupTimestamp(date: Date): string {
@@ -36,55 +49,4 @@ export function formatBackupTimestamp(date: Date): string {
 
 export function getRelativeBackupPath(timestamp: string): string {
   return join('.funimas', 'backups', timestamp);
-}
-
-export async function assertProjectDirectoryExists(projectPath: string): Promise<void> {
-  try {
-    const projectStats = await stat(projectPath);
-
-    if (!projectStats.isDirectory()) {
-      throw new BackupError(`La ruta no es un directorio: ${projectPath}`);
-    }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new BackupError(`El proyecto no existe: ${projectPath}`);
-    }
-
-    throw error;
-  }
-}
-
-export async function ensureDirectory(path: string): Promise<void> {
-  await mkdir(path, { recursive: true });
-}
-
-export async function copyProjectContents(
-  sourceDir: string,
-  destinationDir: string,
-): Promise<number> {
-  await ensureDirectory(destinationDir);
-
-  const entries = await readdir(sourceDir, { withFileTypes: true });
-  let filesCopied = 0;
-
-  for (const entry of entries) {
-    if (isExcludedEntry(entry.name)) {
-      continue;
-    }
-
-    const sourcePath = join(sourceDir, entry.name);
-    const destinationPath = join(destinationDir, entry.name);
-
-    if (entry.isDirectory()) {
-      filesCopied += await copyProjectContents(sourcePath, destinationPath);
-      continue;
-    }
-
-    if (entry.isFile()) {
-      await copyFile(sourcePath, destinationPath);
-      filesCopied += 1;
-    }
-  }
-
-  return filesCopied;
 }

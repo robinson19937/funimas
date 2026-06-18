@@ -37,28 +37,28 @@ npm start -- protect ./mi-proyecto
 
 #### `protect <ruta-del-proyecto>`
 
-Inicializa la protección de un proyecto. Lo primero que hace es crear un backup completo en `.funimas/backups/` antes de cualquier transformación.
+Inicializa la protección de un proyecto siguiendo este flujo:
+
+1. **Backup** del proyecto original en `.funimas/backups/`
+2. **Workspace** de trabajo en `<proyecto>_funimas` (única copia que Funimas modificará)
 
 ```
-Funimas v0.1.0
+Funimas
 
-Proyecto:
+✔ Backup creado
+
+✔ Workspace creado
+
+Proyecto original:
+
 /ruta/absoluta/del/proyecto
 
-Inicializando...
+Proyecto de trabajo:
 
-Creando backup...
-
-✔ Backup completado
-
-Archivos copiados: 42
-
-Destino:
-
-.funimas/backups/2026-06-18_14-35-22
+/ruta/absoluta/del/proyecto_funimas
 ```
 
-El backup excluye automáticamente: `node_modules`, `.git`, `.funimas`, `dist` y `coverage`.
+Tanto el backup como el workspace excluyen automáticamente: `node_modules`, `.git`, `.funimas`, `dist` y `coverage`.
 
 ## Estructura del proyecto
 
@@ -71,6 +71,7 @@ src/
   planner/     Planificación (futuro)
   generator/   Generación de código (futuro)
   backup/      Motor de copias de seguridad (BackupEngine)
+  workspace/   Copia de trabajo del proyecto (WorkspaceEngine)
   report/      Informes (futuro)
   utils/       Utilidades compartidas
 tests/         Pruebas unitarias
