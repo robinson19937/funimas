@@ -18,3 +18,10 @@ export {
   isSupportedFunctionOperation,
   operationTypeToFileName,
 } from './operation-utils.js';
+export {
+  DatabaseInsertFunctionGenerator,
+  type DatabaseInsertFunctionGeneratorOptions,
+  type DatabaseInsertFunctionGeneratorService,
+  type DatabaseInsertFunctionMetadata,
+  type DatabaseInsertFunctionResult,
+} from './functions/DatabaseInsertFunctionGenerator.js';

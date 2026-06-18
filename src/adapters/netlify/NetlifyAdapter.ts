@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { AdapterCapabilities } from '../AdapterCapabilities.js';
 import type { AdapterContext } from '../AdapterContext.js';
 import type { GeneratedFile } from '../GeneratedFile.js';
-import { renderNetlifyDatabaseInsertHandler } from './templates/database-insert-handler.js';
 import { pathExists } from '../adapter-path.js';
 import type {
   AdapterDetectionResult,
@@ -17,10 +16,12 @@ import {
   createEmptyRuntimeArtifact,
 } from '../AdapterResult.js';
 import { operationTypeToFileName } from '../../utils/operation-naming.js';
+import { RuntimeTemplateEngine } from '../../runtime/RuntimeTemplateEngine.js';
 import { BasePlatformAdapter } from '../PlatformAdapter.js';
 
 const NETLIFY_MARKER = 'netlify.toml';
 const NETLIFY_FUNCTIONS_DIR = 'netlify/functions';
+const DATABASE_INSERT_TEMPLATE = 'netlify/databaseInsert.hbs';
 
 /**
  * Adaptador para proyectos desplegados en Netlify.
@@ -39,6 +40,12 @@ export class NetlifyAdapter extends BasePlatformAdapter {
       'configuration',
     ],
   });
+  private readonly templateEngine: RuntimeTemplateEngine;
+
+  constructor(templateEngine: RuntimeTemplateEngine = new RuntimeTemplateEngine()) {
+    super();
+    this.templateEngine = templateEngine;
+  }
 
   async detect(context: AdapterContext): Promise<AdapterDetectionResult> {
     const markerPath = join(context.getTargetPath(), NETLIFY_MARKER);
@@ -64,10 +71,11 @@ export class NetlifyAdapter extends BasePlatformAdapter {
     }
 
     const fileName = `${operationTypeToFileName(operation.type)}.ts`;
+    const content = await this.templateEngine.render(DATABASE_INSERT_TEMPLATE);
     const file: GeneratedFile = {
       fileName,
       relativePath: join(NETLIFY_FUNCTIONS_DIR, fileName),
-      content: renderNetlifyDatabaseInsertHandler(),
+      content,
     };
 
     return createEmptyAdapterResult({
@@ -76,6 +84,7 @@ export class NetlifyAdapter extends BasePlatformAdapter {
       metadata: {
         operationType: operation.type,
         platform: this.id,
+        templateUsed: `templates/${DATABASE_INSERT_TEMPLATE}`,
       },
     });
   }

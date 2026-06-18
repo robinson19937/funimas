@@ -1,0 +1,41 @@
+import type { Handler } from '@netlify/functions';
+
+import { createHandler } from '../../runtime/handler.js';
+
+const runtime = createHandler();
+
+export const handler: Handler = async (event) => {
+  try {
+    const body = event.body ? JSON.parse(event.body) : {};
+    const collection = body.collection;
+    const data = body.data;
+
+    if (!collection || !data) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          success: false,
+          message: 'collection and data are required',
+        }),
+      };
+    }
+
+    const response = await runtime.database.insert({
+      collection,
+      data,
+    });
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify(response),
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+      }),
+    };
+  }
+};

@@ -1,8 +1,12 @@
+import { TransformationBenefit } from '../../report/TransformationBenefit.js';
+import { TransformationReason } from '../../report/TransformationReason.js';
 import type { SemanticOperation } from '../../semantic/SemanticOperation.js';
 import type { RewriteApplication } from '../RewriteApplication.js';
 import type { RewriteContext } from '../RewriteContext.js';
 import type { RewriteRule } from '../RewriteRule.js';
 import { extractCollectionName, findCallExpressionAt } from '../rewrite-utils.js';
+
+const TEMPLATE_USED = 'templates/netlify/databaseInsert.hbs';
 
 export class DatabaseInsertRewriteRule implements RewriteRule {
   readonly id = 'database-insert-rewrite';
@@ -46,11 +50,18 @@ export class DatabaseInsertRewriteRule implements RewriteRule {
 
     callExpression.replaceWithText(after);
 
+    const callee = typeof operation.metadata.callee === 'string' ? operation.metadata.callee : 'addDoc';
+
     return {
       before,
       after,
       ruleId: this.id,
       ruleName: this.name,
+      reason: TransformationReason.forOperation(operation.type, callee),
+      benefit: TransformationBenefit.forOperation(operation.type, callee),
+      riskLevel: 'LOW',
+      templateUsed: TEMPLATE_USED,
+      relatedFiles: ['netlify/functions/database_insert.ts'],
     };
   }
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, join, relative, resolve } from 'node:path';
 
@@ -14,6 +15,13 @@ export interface ChangeReportSummary {
   duration: number;
   date: string;
   funimasVersion: string;
+  totalBenefits: number;
+  totalReasons: number;
+  generatedFunctions: string[];
+  generatedRuntimeFiles: string[];
+  generatedSDKFiles: string[];
+  compilerVersion: string;
+  executionId: string;
 }
 
 export interface ChangeReportResult {
@@ -40,6 +48,7 @@ export class ChangeReportGenerator {
     semanticResult: SemanticResult,
     duration: number,
     finishedAt: Date,
+    executionId: string = randomUUID(),
   ): Promise<ChangeReportResult> {
     const records = history.getRecords();
     const reportDir = join(workspacePath, '.funimas', 'reports');
@@ -54,6 +63,13 @@ export class ChangeReportGenerator {
         after: record.after,
         rewriteRule: record.rewriteRule,
         operation: record.operation,
+        reason: record.reason,
+        benefit: record.benefit,
+        riskLevel: record.riskLevel,
+        generatedFiles: record.generatedFiles,
+        generatedAt: record.generatedAt,
+        compilerVersion: record.compilerVersion,
+        status: record.status,
       }));
 
     const modifiedFiles = [
@@ -68,6 +84,20 @@ export class ChangeReportGenerator {
       ...new Set(records.flatMap((record) => record.generatedFiles)),
     ];
 
+    const generatedFunctions = [
+      ...new Set(
+        generatedFiles.filter((file) => file.startsWith('netlify/functions/')),
+      ),
+    ];
+
+    const generatedRuntimeFiles = [
+      ...new Set(generatedFiles.filter((file) => file.startsWith('runtime/'))),
+    ];
+
+    const generatedSDKFiles = [
+      ...new Set(generatedFiles.filter((file) => file.startsWith('sdk/'))),
+    ];
+
     const operationsFound = semanticResult.operationsByType;
     const operationsTransformed = records.reduce<Record<string, number>>((counts, record) => {
       if (record.before.length > 0) {
@@ -77,6 +107,9 @@ export class ChangeReportGenerator {
       return counts;
     }, {});
 
+    const totalReasons = records.filter((record) => record.reason.length > 0).length;
+    const totalBenefits = records.filter((record) => record.benefit.length > 0).length;
+
     const summary: ChangeReportSummary = {
       modifiedFiles,
       generatedFiles,
@@ -85,13 +118,22 @@ export class ChangeReportGenerator {
       duration,
       date: finishedAt.toISOString(),
       funimasVersion: VERSION,
+      totalBenefits,
+      totalReasons,
+      generatedFunctions,
+      generatedRuntimeFiles,
+      generatedSDKFiles,
+      compilerVersion: VERSION,
+      executionId,
     };
 
     const markdown = await this.templateEngine.render('reports/changes.md.hbs', {
       records: reportRecords,
+      funimasVersion: VERSION,
     });
     const html = await this.templateEngine.render('reports/changes.html.hbs', {
       records: reportRecords,
+      funimasVersion: VERSION,
     });
     const summaryJson = await this.templateEngine.render('reports/summary.json.hbs', {
       ...summary,

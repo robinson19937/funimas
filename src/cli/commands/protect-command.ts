@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 
 import {
@@ -18,8 +19,11 @@ import {
   type FunctionGeneratorService,
   type SDKGeneratorService,
 } from '../../generator/index.js';
+import { DatabaseInsertFunctionGenerator } from '../../generator/functions/DatabaseInsertFunctionGenerator.js';
 import { TransformationHistory } from '../../history/index.js';
 import { ChangeReportGenerator } from '../../report/index.js';
+import { TransformationBenefit } from '../../report/TransformationBenefit.js';
+import { TransformationReason } from '../../report/TransformationReason.js';
 import { RuntimeGenerator, RuntimeContext, type RuntimeGeneratorService } from '../../runtime/index.js';
 import { CodeRewriter, RewriteContext, type CodeRewriterService } from '../../rewriter/index.js';
 import type { RewriteResult } from '../../rewriter/RewriteResult.js';
@@ -34,6 +38,7 @@ import { SemanticAnalyzer, type SemanticAnalyzerService } from '../../semantic/i
 import type { SemanticResult } from '../../semantic/SemanticResult.js';
 import { SemanticOperation } from '../../semantic/SemanticOperation.js';
 import { ConsoleOutputWriter, NullOutputWriter, type OutputWriter } from '../../utils/index.js';
+import { VERSION } from '../../utils/version.js';
 import { WorkspaceEngine, type WorkspaceService } from '../../workspace/index.js';
 import type { WorkspaceResult } from '../../workspace/WorkspaceResult.js';
 
@@ -53,6 +58,7 @@ export interface ProtectCommandOptions {
   codeRewriter?: CodeRewriterService;
   backendRuntimeGenerator?: RuntimeGeneratorService;
   changeReportGenerator?: ChangeReportGenerator;
+  databaseInsertFunctionGenerator?: DatabaseInsertFunctionGenerator;
 }
 
 export class ProtectCommand {
@@ -71,6 +77,8 @@ export class ProtectCommand {
   private readonly codeRewriter: CodeRewriterService;
   private readonly backendRuntimeGenerator: RuntimeGeneratorService;
   private readonly changeReportGenerator: ChangeReportGenerator;
+  private readonly databaseInsertFunctionGenerator: DatabaseInsertFunctionGenerator;
+  private readonly executionId: string;
 
   constructor(options: ProtectCommandOptions) {
     this.projectPath = resolve(options.projectPath);
@@ -89,6 +97,9 @@ export class ProtectCommand {
     this.codeRewriter = options.codeRewriter ?? new CodeRewriter();
     this.backendRuntimeGenerator = options.backendRuntimeGenerator ?? new RuntimeGenerator();
     this.changeReportGenerator = options.changeReportGenerator ?? new ChangeReportGenerator();
+    this.databaseInsertFunctionGenerator =
+      options.databaseInsertFunctionGenerator ?? new DatabaseInsertFunctionGenerator();
+    this.executionId = randomUUID();
   }
 
   async execute(): Promise<PlannerResult> {
@@ -155,11 +166,30 @@ export class ProtectCommand {
 
       this.output.writeln('Generando SDK...');
       this.output.writeln();
-      await this.sdkGenerator.generate(generatorContext);
+      const sdkResult = await this.sdkGenerator.generate(generatorContext);
       this.output.writeln('✔ SDK');
       this.output.writeln();
 
-      this.output.writeln('Generando Functions...');
+      for (const generatedFile of sdkResult.files) {
+        await history.record({
+          file: generatedFile.absolutePath,
+          operation: 'GENERATE_SDK',
+          rewriteRule: 'SDKGenerator',
+          before: '',
+          after: generatedFile.content,
+          generatedFiles: [generatedFile.relativePath],
+          modifiedImports: [],
+          status: 'COMPLETED',
+          reason: 'El SDK centraliza el acceso a operaciones protegidas desde el cliente.',
+          benefit: TransformationBenefit.forOperation('DATABASE_INSERT', 'addDoc'),
+          riskLevel: 'LOW',
+          generatedBy: 'SDKGenerator',
+          templateUsed: 'src/generator/templates/sdk/index.ts',
+          compilerVersion: VERSION,
+        });
+      }
+
+      this.output.writeln('Generando Netlify Function...');
       this.output.writeln();
 
       const plannerContext = new PlannerContext(semanticResult);
@@ -176,6 +206,45 @@ export class ProtectCommand {
 
         processedOperationTypes.add(operation.type);
 
+        const insertResult = await this.databaseInsertFunctionGenerator.generate(
+          generatorContext,
+          operation,
+          adapterDetection.adapter,
+        );
+
+        if (insertResult) {
+          this.output.writeln(`✔ ${insertResult.file.fileName}`);
+          this.output.writeln();
+
+          this.output.writeln('Registrando transformación...');
+          this.output.writeln();
+          this.output.writeln('✔ Reason registrada');
+          this.output.writeln();
+          this.output.writeln('✔ Benefit registrado');
+          this.output.writeln();
+          this.output.writeln(`✔ Risk Level: ${insertResult.metadata.riskLevel}`);
+          this.output.writeln();
+
+          await history.record({
+            file: insertResult.file.absolutePath,
+            operation: 'GENERATE_FUNCTION',
+            rewriteRule: insertResult.metadata.generatedBy,
+            before: '',
+            after: insertResult.file.content,
+            generatedFiles: insertResult.metadata.relatedGeneratedFiles,
+            modifiedImports: [],
+            status: 'COMPLETED',
+            reason: insertResult.metadata.reason,
+            benefit: insertResult.metadata.benefit,
+            riskLevel: insertResult.metadata.riskLevel,
+            generatedBy: insertResult.metadata.generatedBy,
+            templateUsed: insertResult.metadata.templateUsed,
+            compilerVersion: insertResult.metadata.compilerVersion,
+          });
+
+          continue;
+        }
+
         const functionResult = await this.functionGenerator.generate(
           generatorContext,
           operation,
@@ -190,6 +259,9 @@ export class ProtectCommand {
             const generatedFile = functionResult.files.find((file) => file.fileName === fileName);
 
             if (generatedFile) {
+              const callee =
+                typeof operation.metadata.callee === 'string' ? operation.metadata.callee : undefined;
+
               await history.record({
                 file: generatedFile.absolutePath,
                 operation: 'GENERATE_FUNCTION',
@@ -199,6 +271,12 @@ export class ProtectCommand {
                 generatedFiles: [generatedFile.relativePath],
                 modifiedImports: [],
                 status: 'COMPLETED',
+                reason: TransformationReason.forOperation(operation.type, callee),
+                benefit: TransformationBenefit.forOperation(operation.type, callee),
+                riskLevel: 'LOW',
+                generatedBy: 'FunctionGenerator',
+                templateUsed: 'templates/netlify/databaseInsert.hbs',
+                compilerVersion: VERSION,
               });
             }
           }
@@ -241,7 +319,7 @@ export class ProtectCommand {
     this.output.writeln(`✔ ${history.getRecordCount()} transformaciones registradas`);
     this.output.writeln();
 
-    this.output.writeln('Generando reporte...');
+    this.output.writeln('Actualizando reporte...');
     this.output.writeln();
 
     const pipelineFinishedAt = new Date();
@@ -251,6 +329,7 @@ export class ProtectCommand {
       semanticResult,
       pipelineFinishedAt.getTime() - pipelineStartedAt.getTime(),
       pipelineFinishedAt,
+      this.executionId,
     );
 
     this.output.writeln('✔ changes.md');

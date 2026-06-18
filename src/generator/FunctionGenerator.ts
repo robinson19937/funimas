@@ -5,9 +5,11 @@ import type { SemanticOperation } from '../semantic/SemanticOperation.js';
 import type { GeneratorContext } from './GeneratorContext.js';
 import { GeneratorResult } from './GeneratorResult.js';
 import { GeneratorFileWriter } from './GeneratorFileWriter.js';
+import { DatabaseInsertFunctionGenerator } from './functions/DatabaseInsertFunctionGenerator.js';
 
 export interface FunctionGeneratorOptions {
   fileWriter?: GeneratorFileWriter;
+  databaseInsertGenerator?: DatabaseInsertFunctionGenerator;
   now?: () => Date;
 }
 
@@ -20,14 +22,19 @@ export interface FunctionGeneratorService {
 }
 
 /**
- * Genera funciones delegando en el adaptador de plataforma seleccionado.
+ * Genera funciones delegando en generadores especializados o el adaptador de plataforma.
  */
 export class FunctionGenerator implements FunctionGeneratorService {
   private readonly fileWriter: GeneratorFileWriter;
+  private readonly databaseInsertGenerator: DatabaseInsertFunctionGenerator;
   private readonly now: () => Date;
 
   constructor(options: FunctionGeneratorOptions = {}) {
     this.fileWriter = options.fileWriter ?? new GeneratorFileWriter();
+    this.databaseInsertGenerator =
+      options.databaseInsertGenerator ?? new DatabaseInsertFunctionGenerator({
+        fileWriter: this.fileWriter,
+      });
     this.now = options.now ?? (() => new Date());
   }
 
@@ -37,6 +44,26 @@ export class FunctionGenerator implements FunctionGeneratorService {
     adapter: PlatformAdapter,
   ): Promise<GeneratorResult> {
     const startedAt = this.now();
+
+    const specializedResult = await this.databaseInsertGenerator.generate(
+      context,
+      operation,
+      adapter,
+    );
+
+    if (specializedResult) {
+      const finishedAt = this.now();
+
+      return new GeneratorResult({
+        files: [specializedResult.file],
+        runtimeGenerated: false,
+        sdkGenerated: false,
+        functionFileNames: [specializedResult.file.fileName],
+        startedAt,
+        finishedAt,
+      });
+    }
+
     const adapterContext = new AdapterContext({
       projectPath: context.projectPath,
       workspacePath: context.workspacePath,

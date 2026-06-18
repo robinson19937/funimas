@@ -1,24 +1,50 @@
 # Funimas Change Report
 
+Versión: {{funimasVersion}}
+
 {{#each records}}
-Archivo:
+## {{relativeFile}}
 
-{{relativeFile}}
+**Regla:** {{rewriteRule}}
 
---------------------------------
+**Operación:** {{operation}}
 
-- {{{before}}}
+**Nivel de riesgo:** {{riskLevel}}
 
-+ {{{after}}}
+**Fecha:** {{generatedAt}}
 
---------------------------------
+**Versión:** {{compilerVersion}}
 
-Regla
+### ANTES
 
-{{rewriteRule}}
+```
+{{{before}}}
+```
 
-Operación
+### DESPUÉS
 
-{{operation}}
+```
+{{{after}}}
+```
+
+### Motivo
+
+{{reason}}
+
+### Beneficio
+
+{{benefit}}
+
+### Archivos relacionados
+
+{{#each generatedFiles}}
+- {{this}}
+{{/each}}
+
+### Estado
+
+{{status}}
+
+---
 
 {{/each}}

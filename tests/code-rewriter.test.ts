@@ -169,8 +169,13 @@ describe('ProtectCommand + CodeRewriter integration', () => {
       expect(historyContents.some((content) => content.includes('DatabaseInsertRewriteRule'))).toBe(
         true,
       );
+      expect(historyContents.some((content) => content.includes('addDoc'))).toBe(true);
+      expect(historyContents.some((content) => content.includes('"reason"'))).toBe(true);
+      expect(historyContents.some((content) => content.includes('"riskLevel"'))).toBe(true);
       expect(historyFiles.length).toBeGreaterThanOrEqual(7);
       expect(changesMarkdown).toContain('Funimas.database.insert');
+      expect(changesMarkdown).toContain('### Motivo');
+      expect(changesMarkdown).toContain('Menor exposición del backend');
       expect(summaryJson.generatedFiles).toEqual(
         expect.arrayContaining(['runtime/handler.ts', 'netlify/functions/database_insert.ts']),
       );

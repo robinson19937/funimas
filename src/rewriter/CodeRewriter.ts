@@ -114,9 +114,14 @@ export class CodeRewriter implements CodeRewriterService {
             rewriteRule: pendingRewrite.application.ruleName,
             before: pendingRewrite.application.before,
             after: pendingRewrite.application.after,
-            generatedFiles: [],
+            generatedFiles: pendingRewrite.application.relatedFiles,
             modifiedImports,
             status: 'COMPLETED',
+            reason: pendingRewrite.application.reason,
+            benefit: pendingRewrite.application.benefit,
+            riskLevel: pendingRewrite.application.riskLevel,
+            generatedBy: pendingRewrite.application.ruleName,
+            templateUsed: pendingRewrite.application.templateUsed,
           });
         }
       }

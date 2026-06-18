@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import type { RuntimeContext } from './RuntimeContext.js';
 import { RuntimeResult } from './RuntimeResult.js';
 import { RuntimeTemplateEngine } from './RuntimeTemplateEngine.js';
+import { VERSION } from '../utils/version.js';
 
 export interface RuntimeFileDefinition {
   templatePath: string;
@@ -83,6 +84,12 @@ export class RuntimeGenerator implements RuntimeGeneratorService {
           generatedFiles: [definition.outputPath],
           modifiedImports: [],
           status: 'COMPLETED',
+          reason: 'El runtime centraliza la lógica de acceso a datos en el servidor.',
+          benefit: 'Menor exposición del backend. Centralización de la lógica. Mejor mantenibilidad.',
+          riskLevel: 'LOW',
+          generatedBy: 'RuntimeGenerator',
+          templateUsed: `templates/${definition.templatePath}`,
+          compilerVersion: VERSION,
         });
       }
     }

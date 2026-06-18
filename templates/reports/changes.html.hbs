@@ -4,22 +4,77 @@
     <meta charset="UTF-8" />
     <title>Funimas Change Report</title>
     <style>
-      body { font-family: monospace; margin: 2rem; }
-      .record { margin-bottom: 2rem; border-bottom: 1px solid #ccc; padding-bottom: 1rem; }
-      .removed { color: #c00; }
-      .added { color: #080; }
+      body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.5; }
+      .record { margin-bottom: 2rem; border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }
+      .section { margin: 1rem 0; }
+      .section summary { cursor: pointer; font-weight: 600; }
+      .removed { color: #c00; background: #fff5f5; padding: 0.75rem; border-radius: 4px; }
+      .added { color: #080; background: #f5fff5; padding: 0.75rem; border-radius: 4px; }
+      .arrow { text-align: center; font-size: 1.5rem; color: #666; }
+      .meta { color: #555; font-size: 0.9rem; }
+      .risk-low { color: #080; }
+      .risk-medium { color: #c80; }
+      .risk-high { color: #c00; }
+      .risk-critical { color: #800; font-weight: bold; }
     </style>
   </head>
   <body>
     <h1>Funimas Change Report</h1>
+    <p class="meta">Versión: {{funimasVersion}}</p>
     {{#each records}}
-    <section class="record">
+    <article class="record">
       <h2>{{relativeFile}}</h2>
-      <p><strong>Regla:</strong> {{rewriteRule}}</p>
-      <p><strong>Operación:</strong> {{operation}}</p>
-      <pre class="removed">- {{{before}}}</pre>
-      <pre class="added">+ {{{after}}}</pre>
-    </section>
+      <p class="meta">
+        <strong>Regla:</strong> {{rewriteRule}} |
+        <strong>Operación:</strong> {{operation}} |
+        <strong>Riesgo:</strong>
+        <span class="risk-{{toLowerCase riskLevel}}">{{riskLevel}}</span>
+      </p>
+
+      <details class="section" open>
+        <summary>ANTES</summary>
+        <pre class="removed">{{before}}</pre>
+      </details>
+
+      <div class="arrow">↓</div>
+
+      <details class="section" open>
+        <summary>DESPUÉS</summary>
+        <pre class="added">{{after}}</pre>
+      </details>
+
+      <div class="arrow">↓</div>
+
+      <details class="section">
+        <summary>Motivo</summary>
+        <p>{{reason}}</p>
+      </details>
+
+      <div class="arrow">↓</div>
+
+      <details class="section">
+        <summary>Beneficio</summary>
+        <p>{{benefit}}</p>
+      </details>
+
+      <div class="arrow">↓</div>
+
+      <details class="section">
+        <summary>Archivos relacionados</summary>
+        <ul>
+          {{#each generatedFiles}}
+          <li>{{this}}</li>
+          {{/each}}
+        </ul>
+      </details>
+
+      <div class="arrow">↓</div>
+
+      <details class="section">
+        <summary>Estado</summary>
+        <p>{{status}} — {{generatedAt}} (v{{compilerVersion}})</p>
+      </details>
+    </article>
     {{/each}}
   </body>
 </html>

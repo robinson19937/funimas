@@ -149,14 +149,20 @@ describe('ChangeReportGenerator', () => {
     const summary = JSON.parse(await readFile(result.summaryPath, 'utf8')) as Record<string, unknown>;
 
     expect(markdown).toContain('DatabaseInsertRewriteRule');
-    expect(markdown).toContain('- await addDoc(collection(db,"clientes"),cliente);');
-    expect(markdown).toContain('+ await Funimas.database.insert("clientes",cliente);');
+    expect(markdown).toContain('await addDoc(collection(db,"clientes"),cliente);');
+    expect(markdown).toContain('await Funimas.database.insert("clientes",cliente);');
+    expect(markdown).toContain('### Motivo');
+    expect(markdown).toContain('### Beneficio');
     expect(html).toContain('<html');
     expect(html).toContain('DATABASE_INSERT');
     expect(summary.modifiedFiles).toEqual(['src/App.tsx']);
     expect(summary.operationsFound).toMatchObject({ DATABASE_INSERT: 6 });
     expect(summary.operationsTransformed).toMatchObject({ DATABASE_INSERT: 1 });
     expect(summary.funimasVersion).toBe('0.1.0');
+    expect(summary.totalReasons).toBe(0);
+    expect(summary.totalBenefits).toBe(0);
+    expect(summary.compilerVersion).toBe('0.1.0');
+    expect(summary.executionId).toBeDefined();
   });
 });
 

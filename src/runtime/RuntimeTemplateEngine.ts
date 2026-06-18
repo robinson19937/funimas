@@ -6,6 +6,7 @@ import Handlebars from 'handlebars';
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 Handlebars.registerHelper('json', (value: unknown) => JSON.stringify(value));
+Handlebars.registerHelper('toLowerCase', (value: string) => String(value).toLowerCase());
 
 /**
  * Motor de plantillas Handlebars para runtime y reportes.

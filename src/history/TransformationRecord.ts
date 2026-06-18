@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
+import type { RiskLevel } from '../report/RiskLevel.js';
+import { VERSION } from '../utils/version.js';
+
 export const TRANSFORMATION_STATUSES = ['PENDING', 'COMPLETED', 'FAILED'] as const;
 
 export type TransformationStatus = (typeof TRANSFORMATION_STATUSES)[number];
@@ -15,6 +18,13 @@ export interface TransformationRecordData {
   generatedFiles: string[];
   modifiedImports: string[];
   status: TransformationStatus;
+  reason?: string;
+  benefit?: string;
+  riskLevel?: RiskLevel;
+  generatedBy?: string;
+  generatedAt?: string;
+  templateUsed?: string;
+  compilerVersion?: string;
 }
 
 export class TransformationRecord {
@@ -28,6 +38,13 @@ export class TransformationRecord {
   readonly generatedFiles: string[];
   readonly modifiedImports: string[];
   readonly status: TransformationStatus;
+  readonly reason: string;
+  readonly benefit: string;
+  readonly riskLevel: RiskLevel;
+  readonly generatedBy: string;
+  readonly generatedAt: string;
+  readonly templateUsed: string;
+  readonly compilerVersion: string;
 
   constructor(data: TransformationRecordData) {
     this.id = data.id ?? randomUUID();
@@ -40,6 +57,13 @@ export class TransformationRecord {
     this.generatedFiles = data.generatedFiles;
     this.modifiedImports = data.modifiedImports;
     this.status = data.status;
+    this.reason = data.reason ?? '';
+    this.benefit = data.benefit ?? '';
+    this.riskLevel = data.riskLevel ?? 'LOW';
+    this.generatedBy = data.generatedBy ?? '';
+    this.generatedAt = data.generatedAt ?? this.timestamp.toISOString();
+    this.templateUsed = data.templateUsed ?? '';
+    this.compilerVersion = data.compilerVersion ?? VERSION;
   }
 
   toJSON(): Record<string, unknown> {
@@ -54,6 +78,13 @@ export class TransformationRecord {
       generatedFiles: this.generatedFiles,
       modifiedImports: this.modifiedImports,
       status: this.status,
+      reason: this.reason,
+      benefit: this.benefit,
+      riskLevel: this.riskLevel,
+      generatedBy: this.generatedBy,
+      generatedAt: this.generatedAt,
+      templateUsed: this.templateUsed,
+      compilerVersion: this.compilerVersion,
     };
   }
 
@@ -73,6 +104,13 @@ export class TransformationRecord {
         ? data.modifiedImports.map(String)
         : [],
       status: (data.status as TransformationStatus) ?? 'COMPLETED',
+      reason: data.reason ? String(data.reason) : undefined,
+      benefit: data.benefit ? String(data.benefit) : undefined,
+      riskLevel: data.riskLevel ? (String(data.riskLevel) as RiskLevel) : undefined,
+      generatedBy: data.generatedBy ? String(data.generatedBy) : undefined,
+      generatedAt: data.generatedAt ? String(data.generatedAt) : undefined,
+      templateUsed: data.templateUsed ? String(data.templateUsed) : undefined,
+      compilerVersion: data.compilerVersion ? String(data.compilerVersion) : undefined,
     });
   }
 }

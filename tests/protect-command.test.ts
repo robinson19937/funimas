@@ -25,6 +25,7 @@ import type {
   FunctionGeneratorService,
   SDKGeneratorService,
 } from '../src/generator/index.js';
+import type { DatabaseInsertFunctionGeneratorService } from '../src/generator/functions/DatabaseInsertFunctionGenerator.js';
 import { RuntimeResult } from '../src/runtime/RuntimeResult.js';
 import type { RuntimeGeneratorService } from '../src/runtime/index.js';
 import { RewriteResult, createEmptyOperationsRewritten } from '../src/rewriter/RewriteResult.js';
@@ -266,6 +267,27 @@ describe('ProtectCommand', () => {
         }),
       ),
     };
+    const databaseInsertFunctionGenerator: DatabaseInsertFunctionGeneratorService = {
+      generate: vi.fn().mockResolvedValue({
+        file: {
+          fileName: 'database_insert.ts',
+          relativePath: 'netlify/functions/database_insert.ts',
+          absolutePath: '/tmp/mi-proyecto_funimas/netlify/functions/database_insert.ts',
+          content: 'export const handler = async () => ({ statusCode: 200, body: "" });',
+        },
+        metadata: {
+          reason: 'La operación addDoc() fue reemplazada...',
+          benefit: 'Menor exposición del backend.',
+          riskLevel: 'LOW',
+          generatedBy: 'DatabaseInsertFunctionGenerator',
+          generatedAt: new Date('2026-06-18T14:35:36.000Z'),
+          templateUsed: 'templates/netlify/databaseInsert.hbs',
+          compilerVersion: '0.1.0',
+          relatedGeneratedFiles: ['netlify/functions/database_insert.ts'],
+        },
+      }),
+    };
+
     const functionGenerator: FunctionGeneratorService = {
       generate: vi.fn().mockResolvedValue(
         new GeneratorResult({
@@ -320,6 +342,7 @@ describe('ProtectCommand', () => {
       functionGenerator,
       codeRewriter,
       changeReportGenerator,
+      databaseInsertFunctionGenerator,
     });
 
     const result = await command.execute();
@@ -356,7 +379,11 @@ describe('ProtectCommand', () => {
     expect(output.lines).toContain('✔ Functions');
     expect(output.lines).toContain('✔ Environment');
     expect(output.lines).toContain('Generando SDK...');
-    expect(output.lines).toContain('Generando Functions...');
+    expect(output.lines).toContain('Generando Netlify Function...');
+    expect(output.lines).toContain('Registrando transformación...');
+    expect(output.lines).toContain('✔ Reason registrada');
+    expect(output.lines).toContain('✔ Benefit registrado');
+    expect(output.lines).toContain('✔ Risk Level: LOW');
     expect(output.lines).toContain('Generando Runtime...');
     expect(output.lines).toContain('✔ handler.ts');
     expect(output.lines).toContain('✔ databaseController.ts');
@@ -364,14 +391,15 @@ describe('ProtectCommand', () => {
     expect(output.lines).toContain('✔ database_insert.ts');
     expect(backendRuntimeGenerator.generate).toHaveBeenCalledOnce();
     expect(sdkGenerator.generate).toHaveBeenCalledOnce();
-    expect(functionGenerator.generate).toHaveBeenCalledOnce();
+    expect(databaseInsertFunctionGenerator.generate).toHaveBeenCalledOnce();
+    expect(functionGenerator.generate).not.toHaveBeenCalled();
     expect(output.lines).toContain('Reescribiendo código...');
     expect(output.lines).toContain('✔ App.tsx');
     expect(output.lines).toContain('Operaciones transformadas:');
     expect(output.lines).toContain('DATABASE_INSERT: 1');
     expect(codeRewriter.rewrite).toHaveBeenCalledOnce();
     expect(output.lines).toContain('Registrando transformaciones...');
-    expect(output.lines).toContain('Generando reporte...');
+    expect(output.lines).toContain('Actualizando reporte...');
     expect(output.lines).toContain('✔ changes.md');
     expect(output.lines).toContain('✔ summary.json');
     expect(changeReportGenerator.generate).toHaveBeenCalledOnce();

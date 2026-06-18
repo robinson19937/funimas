@@ -144,9 +144,9 @@ describe('FunctionGenerator', () => {
       'utf8',
     );
 
-    expect(content).toContain('export async function handler');
+    expect(content).toContain('export const handler');
     expect(content).toContain('statusCode: 200');
-    expect(content).toContain('Funimas Runtime');
+    expect(content).toContain('createHandler');
   });
 });
 
@@ -305,7 +305,8 @@ describe('ProtectCommand integration', () => {
     expect(runtime).toContain('createHandler');
     expect(sdk).toContain('DatabaseClient');
     expect(databaseClient).toContain('class DatabaseClient');
-    expect(netlifyFunction).toContain('Funimas Runtime');
+    expect(netlifyFunction).toContain('createHandler');
+    expect(netlifyFunction).toContain('runtime.database.insert');
     expect(untouchedService).toBe(originalService);
     await expect(stat(join(projectDir, 'runtime/handler.ts'))).rejects.toThrow();
   });
