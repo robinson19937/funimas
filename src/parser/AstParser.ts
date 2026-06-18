@@ -1,18 +1,13 @@
-import { access } from 'node:fs/promises';
-import { readdir } from 'node:fs/promises';
-import { basename, extname, join, resolve, sep } from 'node:path';
+import { basename, extname, resolve } from 'node:path';
 
-import { Project, type SourceFile, SyntaxKind } from 'ts-morph';
+import { type SourceFile, SyntaxKind } from 'ts-morph';
 
-import { assertProjectDirectoryExists, isExcludedEntry } from '../utils/project-fs.js';
+import { assertProjectDirectoryExists } from '../utils/project-fs.js';
 
 import { AstParserResult } from './AstParserResult.js';
 import { AstProject } from './AstProject.js';
 import { AstSourceFile } from './AstSourceFile.js';
-
-export const SOURCE_FILE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'] as const;
-
-export type SourceFileExtension = (typeof SOURCE_FILE_EXTENSIONS)[number];
+import { TsMorphProjectLoader } from './TsMorphProjectLoader.js';
 
 export interface AstParserService {
   parse(projectPath: string): Promise<AstParserResult>;
@@ -20,13 +15,16 @@ export interface AstParserService {
 
 export interface AstParserOptions {
   now?: () => Date;
+  projectLoader?: TsMorphProjectLoader;
 }
 
 export class AstParser implements AstParserService {
   private readonly now: () => Date;
+  private readonly projectLoader: TsMorphProjectLoader;
 
   constructor(options: AstParserOptions = {}) {
     this.now = options.now ?? (() => new Date());
+    this.projectLoader = options.projectLoader ?? new TsMorphProjectLoader();
   }
 
   async parse(projectPath: string): Promise<AstParserResult> {
@@ -35,10 +33,9 @@ export class AstParser implements AstParserService {
 
     await assertProjectDirectoryExists(resolvedProjectPath);
 
-    const tsMorphProject = await this.loadProject(resolvedProjectPath);
-    const sourceFiles = tsMorphProject
-      .getSourceFiles()
-      .filter((sourceFile) => this.shouldIncludeSourceFile(sourceFile.getFilePath()))
+    const tsMorphProject = await this.projectLoader.load(resolvedProjectPath);
+    const sourceFiles = this.projectLoader
+      .getIncludedSourceFiles(tsMorphProject)
       .map((sourceFile) => this.mapSourceFile(sourceFile));
 
     const totalTypescriptFiles = sourceFiles.filter((file) =>
@@ -63,91 +60,6 @@ export class AstParser implements AstParserService {
       startedAt,
       finishedAt,
     });
-  }
-
-  private async loadProject(projectPath: string): Promise<Project> {
-    const tsConfigFilePath = await this.findTsConfigFile(projectPath);
-
-    if (tsConfigFilePath) {
-      return new Project({
-        tsConfigFilePath,
-      });
-    }
-
-    const project = new Project({
-      skipAddingFilesFromTsConfig: true,
-      compilerOptions: {
-        allowJs: true,
-      },
-    });
-
-    const sourceFilePaths = await this.collectSourceFiles(projectPath);
-
-    for (const sourceFilePath of sourceFilePaths) {
-      project.addSourceFileAtPath(sourceFilePath);
-    }
-
-    return project;
-  }
-
-  private async findTsConfigFile(projectPath: string): Promise<string | undefined> {
-    const tsConfigFilePath = join(projectPath, 'tsconfig.json');
-
-    try {
-      await access(tsConfigFilePath);
-      return tsConfigFilePath;
-    } catch {
-      return undefined;
-    }
-  }
-
-  private async collectSourceFiles(rootDir: string): Promise<string[]> {
-    const sourceFiles: string[] = [];
-
-    const walk = async (currentDir: string): Promise<void> => {
-      const entries = await readdir(currentDir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        if (isExcludedEntry(entry.name)) {
-          continue;
-        }
-
-        const entryPath = join(currentDir, entry.name);
-
-        if (entry.isDirectory()) {
-          await walk(entryPath);
-          continue;
-        }
-
-        if (entry.isFile() && this.isSupportedExtension(extname(entry.name))) {
-          sourceFiles.push(entryPath);
-        }
-      }
-    };
-
-    await walk(rootDir);
-
-    return sourceFiles;
-  }
-
-  private shouldIncludeSourceFile(filePath: string): boolean {
-    if (!this.isSupportedExtension(extname(filePath))) {
-      return false;
-    }
-
-    return !filePath.split(sep).some((segment) => isExcludedEntry(segment));
-  }
-
-  private isSupportedExtension(extension: string): extension is SourceFileExtension {
-    return (SOURCE_FILE_EXTENSIONS as readonly string[]).includes(extension);
-  }
-
-  private isTypescriptExtension(extension: string): boolean {
-    return extension === '.ts' || extension === '.tsx';
-  }
-
-  private isJavascriptExtension(extension: string): boolean {
-    return extension === '.js' || extension === '.jsx';
   }
 
   private mapSourceFile(sourceFile: SourceFile): AstSourceFile {
@@ -175,5 +87,13 @@ export class AstParser implements AstParserService {
       sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration).length +
       sourceFile.getDescendantsOfKind(SyntaxKind.MethodDeclaration).length
     );
+  }
+
+  private isTypescriptExtension(extension: string): boolean {
+    return extension === '.ts' || extension === '.tsx';
+  }
+
+  private isJavascriptExtension(extension: string): boolean {
+    return extension === '.js' || extension === '.jsx';
   }
 }

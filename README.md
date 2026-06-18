@@ -41,7 +41,8 @@ Inicializa la protección de un proyecto siguiendo este flujo:
 
 1. **Backup** del proyecto original en `.funimas/backups/`
 2. **Workspace** de trabajo en `<proyecto>_funimas` (única copia que Funimas modificará)
-3. **AST Parser** para cargar y modelar todos los archivos TypeScript/JavaScript del workspace
+3. **AST Parser** para cargar el proyecto con ts-morph
+4. **Project Scanner** para construir el índice interno del proyecto
 
 ```
 Funimas
@@ -58,18 +59,22 @@ Proyecto de trabajo:
 
 /ruta/absoluta/del/proyecto_funimas
 
-Analizando proyecto...
+Analizando estructura...
 
-✔ Proyecto cargado
+✔ 58 archivos
 
-Archivos encontrados: 42
+✔ 241 imports
 
-TypeScript: 30
+✔ 86 funciones
 
-JavaScript: 12
+✔ 12 clases
+
+✔ 7 interfaces
+
+✔ 2 enums
 ```
 
-Tanto el backup como el workspace excluyen automáticamente: `node_modules`, `.git`, `.funimas`, `dist` y `coverage`. El parser utiliza **ts-morph** y aplica las mismas exclusiones.
+Tanto el backup como el workspace excluyen automáticamente: `node_modules`, `.git`, `.funimas`, `dist` y `coverage`. El parser y el scanner utilizan **ts-morph** y aplican las mismas exclusiones.
 
 ## Estructura del proyecto
 
@@ -78,6 +83,7 @@ src/
   cli/         Punto de entrada y comandos de la CLI
   compiler/    Lógica de compilación (futuro)
   parser/      Carga y modelo AST del proyecto (AstParser / ts-morph)
+  scanner/     Índice interno del proyecto (ProjectScanner)
   analyzer/    Análisis semántico (futuro)
   planner/     Planificación (futuro)
   generator/   Generación de código (futuro)

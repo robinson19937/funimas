@@ -20,8 +20,8 @@ describe('AstParser', () => {
     const { project } = result;
 
     expect(project.projectPath).toBe(sampleProjectPath);
-    expect(project.totalFiles).toBe(3);
-    expect(project.totalTypescriptFiles).toBe(2);
+    expect(project.totalFiles).toBe(6);
+    expect(project.totalTypescriptFiles).toBe(5);
     expect(project.totalJavascriptFiles).toBe(1);
     expect(result.startedAt).toEqual(fixedDate);
     expect(result.finishedAt).toEqual(fixedDate);
