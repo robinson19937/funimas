@@ -25,6 +25,11 @@ export {
   operationTypeToFileName,
 } from './operation-utils.js';
 export {
+  WorkspaceConfigGenerator,
+  type WorkspaceConfigGeneratorOptions,
+  type WorkspaceConfigResult,
+} from './WorkspaceConfigGenerator.js';
+export {
   DatabaseInsertFunctionGenerator,
   type DatabaseInsertFunctionGeneratorOptions,
   type DatabaseInsertFunctionGeneratorService,
