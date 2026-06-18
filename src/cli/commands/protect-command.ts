@@ -1,6 +1,8 @@
 import { resolve } from 'node:path';
 
 import { BackupEngine, type BackupService } from '../../backup/index.js';
+import { GraphBuilder, type GraphBuilderService } from '../../graph/index.js';
+import type { GraphResult } from '../../graph/GraphResult.js';
 import { AstParser, type AstParserService } from '../../parser/index.js';
 import { ProjectScanner, type ProjectScannerService } from '../../scanner/index.js';
 import type { ScanResult } from '../../scanner/ScanResult.js';
@@ -15,6 +17,7 @@ export interface ProtectCommandOptions {
   workspaceEngine?: WorkspaceService;
   astParser?: AstParserService;
   projectScanner?: ProjectScannerService;
+  graphBuilder?: GraphBuilderService;
 }
 
 export class ProtectCommand {
@@ -24,6 +27,7 @@ export class ProtectCommand {
   private readonly workspaceEngine: WorkspaceService;
   private readonly astParser: AstParserService;
   private readonly projectScanner: ProjectScannerService;
+  private readonly graphBuilder: GraphBuilderService;
 
   constructor(options: ProtectCommandOptions) {
     this.projectPath = resolve(options.projectPath);
@@ -33,9 +37,10 @@ export class ProtectCommand {
     this.workspaceEngine = options.workspaceEngine ?? new WorkspaceEngine();
     this.astParser = options.astParser ?? new AstParser();
     this.projectScanner = options.projectScanner ?? new ProjectScanner();
+    this.graphBuilder = options.graphBuilder ?? new GraphBuilder();
   }
 
-  async execute(): Promise<ScanResult> {
+  async execute(): Promise<GraphResult> {
     await this.backupEngine.create(this.projectPath);
     const workspaceResult = await this.workspaceEngine.create(this.projectPath);
 
@@ -50,7 +55,14 @@ export class ProtectCommand {
 
     this.printScanSummary(scanResult);
 
-    return scanResult;
+    this.output.writeln('Construyendo Dependency Graph...');
+    this.output.writeln();
+
+    const graphResult = this.graphBuilder.build(scanResult);
+
+    this.printGraphSummary(graphResult);
+
+    return graphResult;
   }
 
   private printWorkspaceSummary(workspaceResult: WorkspaceResult): void {
@@ -82,5 +94,14 @@ export class ProtectCommand {
     this.output.writeln(`✔ ${scanResult.totalInterfaces} interfaces`);
     this.output.writeln();
     this.output.writeln(`✔ ${scanResult.totalEnums} enums`);
+    this.output.writeln();
+  }
+
+  private printGraphSummary(graphResult: GraphResult): void {
+    this.output.writeln(`✔ Nodos: ${graphResult.totalNodes}`);
+    this.output.writeln();
+    this.output.writeln(`✔ Relaciones: ${graphResult.totalEdges}`);
+    this.output.writeln();
+    this.output.writeln(`✔ Componentes: ${graphResult.totalConnectedComponents}`);
   }
 }

@@ -43,6 +43,7 @@ Inicializa la protección de un proyecto siguiendo este flujo:
 2. **Workspace** de trabajo en `<proyecto>_funimas` (única copia que Funimas modificará)
 3. **AST Parser** para cargar el proyecto con ts-morph
 4. **Project Scanner** para construir el índice interno del proyecto
+5. **Dependency Graph** para mapear relaciones entre archivos
 
 ```
 Funimas
@@ -72,9 +73,17 @@ Analizando estructura...
 ✔ 7 interfaces
 
 ✔ 2 enums
+
+Construyendo Dependency Graph...
+
+✔ Nodos: 58
+
+✔ Relaciones: 214
+
+✔ Componentes: 1
 ```
 
-Tanto el backup como el workspace excluyen automáticamente: `node_modules`, `.git`, `.funimas`, `dist` y `coverage`. El parser y el scanner utilizan **ts-morph** y aplican las mismas exclusiones.
+Tanto el backup como el workspace excluyen automáticamente: `node_modules`, `.git`, `.funimas`, `dist` y `coverage`. El parser, el scanner y el grafo de dependencias utilizan el índice del proyecto sin modificar archivos.
 
 ## Estructura del proyecto
 
@@ -84,6 +93,7 @@ src/
   compiler/    Lógica de compilación (futuro)
   parser/      Carga y modelo AST del proyecto (AstParser / ts-morph)
   scanner/     Índice interno del proyecto (ProjectScanner)
+  graph/       Grafo de dependencias del proyecto (DependencyGraph)
   analyzer/    Análisis semántico (futuro)
   planner/     Planificación (futuro)
   generator/   Generación de código (futuro)

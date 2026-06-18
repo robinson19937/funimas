@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { BackupResult } from '../src/backup/BackupResult.js';
 import type { BackupService } from '../src/backup/BackupEngine.js';
 import { ProtectCommand } from '../src/cli/commands/protect-command.js';
+import { DependencyGraph } from '../src/graph/DependencyGraph.js';
+import { GraphResult } from '../src/graph/GraphResult.js';
+import type { GraphBuilderService } from '../src/graph/GraphBuilder.js';
 import { AstParserResult } from '../src/parser/AstParserResult.js';
 import { AstProject } from '../src/parser/AstProject.js';
 import type { AstParserService } from '../src/parser/AstParser.js';
@@ -21,7 +24,7 @@ class MockOutputWriter implements OutputWriter {
 }
 
 describe('ProtectCommand', () => {
-  it('ejecuta backup, workspace, parser y scanner mostrando el resumen final', async () => {
+  it('ejecuta backup, workspace, parser, scanner y grafo mostrando el resumen final', async () => {
     const output = new MockOutputWriter();
     const backupResult = new BackupResult({
       backupPath: '/tmp/mi-proyecto/.funimas/backups/2026-06-18_14-35-22',
@@ -62,6 +65,15 @@ describe('ProtectCommand', () => {
       startedAt: new Date('2026-06-18T14:35:26.000Z'),
       finishedAt: new Date('2026-06-18T14:35:27.000Z'),
     });
+    const graphResult = new GraphResult({
+      graph: new DependencyGraph(),
+      totalNodes: 58,
+      totalEdges: 214,
+      totalImports: 214,
+      totalConnectedComponents: 1,
+      startedAt: new Date('2026-06-18T14:35:28.000Z'),
+      finishedAt: new Date('2026-06-18T14:35:29.000Z'),
+    });
     const backupEngine: BackupService = {
       create: vi.fn().mockResolvedValue(backupResult),
     };
@@ -74,6 +86,9 @@ describe('ProtectCommand', () => {
     const projectScanner: ProjectScannerService = {
       scan: vi.fn().mockResolvedValue(scanResult),
     };
+    const graphBuilder: GraphBuilderService = {
+      build: vi.fn().mockReturnValue(graphResult),
+    };
 
     const command = new ProtectCommand({
       projectPath: './mi-proyecto',
@@ -82,23 +97,18 @@ describe('ProtectCommand', () => {
       workspaceEngine,
       astParser,
       projectScanner,
+      graphBuilder,
     });
 
     const result = await command.execute();
 
-    expect(backupEngine.create).toHaveBeenCalledOnce();
-    expect(workspaceEngine.create).toHaveBeenCalledOnce();
-    expect(astParser.parse).toHaveBeenCalledOnce();
-    expect(projectScanner.scan).toHaveBeenCalledOnce();
-    expect(projectScanner.scan).toHaveBeenCalledWith(astProject);
-    expect(result).toBe(scanResult);
+    expect(graphBuilder.build).toHaveBeenCalledOnce();
+    expect(graphBuilder.build).toHaveBeenCalledWith(scanResult);
+    expect(result).toBe(graphResult);
 
-    expect(output.lines).toContain('Analizando estructura...');
-    expect(output.lines).toContain('✔ 58 archivos');
-    expect(output.lines).toContain('✔ 241 imports');
-    expect(output.lines).toContain('✔ 86 funciones');
-    expect(output.lines).toContain('✔ 12 clases');
-    expect(output.lines).toContain('✔ 7 interfaces');
-    expect(output.lines).toContain('✔ 2 enums');
+    expect(output.lines).toContain('Construyendo Dependency Graph...');
+    expect(output.lines).toContain('✔ Nodos: 58');
+    expect(output.lines).toContain('✔ Relaciones: 214');
+    expect(output.lines).toContain('✔ Componentes: 1');
   });
 });
