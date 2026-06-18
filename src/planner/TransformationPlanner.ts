@@ -32,6 +32,10 @@ export interface TransformationPlannerOptions {
   now?: () => Date;
 }
 
+/**
+ * Motor de planificación que transforma operaciones semánticas en acciones ejecutables.
+ * No modifica archivos: solo construye el plan para un futuro Executor.
+ */
 export class TransformationPlanner implements TransformationPlannerService {
   private readonly now: () => Date;
 
@@ -47,12 +51,12 @@ export class TransformationPlanner implements TransformationPlannerService {
     this.addFoundationActions(plan);
 
     const provider = context.getProvider() ?? 'unknown';
-    const runtimeActionId = this.ensureRuntimeAction(plan, provider);
-    const sdkActionId = this.ensureSdkAction(plan, provider, runtimeActionId);
     const transformableOperations = context.getTransformableOperations();
     const rewriteIdsByFile = new Map<string, string[]>();
 
     for (const operation of transformableOperations) {
+      const runtimeActionId = this.ensureRuntimeAction(plan, provider);
+      const sdkActionId = this.ensureSdkAction(plan, provider, runtimeActionId);
       const functionActionId = this.createFunctionAction(plan, operation, runtimeActionId, sdkActionId);
       const rewriteActionId = this.createRewriteAction(plan, operation, functionActionId);
       const fileRewrites = rewriteIdsByFile.get(operation.file) ?? [];

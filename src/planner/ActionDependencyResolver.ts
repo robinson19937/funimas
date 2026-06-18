@@ -3,6 +3,9 @@ import { ACTION_TYPE_ORDER, type ActionType } from './ActionType.js';
 import { ActionGraph } from './ActionGraph.js';
 import type { TransformationAction } from './TransformationAction.js';
 
+/**
+ * Resuelve el orden de ejecución usando orden topológico, prioridad y tipo de acción.
+ */
 export class ActionDependencyResolver {
   resolve(actions: TransformationAction[]): TransformationAction[] {
     const graph = new ActionGraph();
@@ -37,11 +40,7 @@ export class ActionDependencyResolver {
     const ordered: TransformationAction[] = [];
 
     while (queue.length > 0) {
-      const current = queue.shift();
-
-      if (!current) {
-        break;
-      }
+      const current = queue.shift()!;
 
       ordered.push(current);
 

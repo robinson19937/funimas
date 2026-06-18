@@ -6,6 +6,9 @@ export interface TransformationPlanExport {
   orderedActionIds: string[];
 }
 
+/**
+ * Colección ordenable de acciones de transformación con resolución de dependencias.
+ */
 export class TransformationPlan {
   private readonly actions = new Map<string, TransformationAction>();
 
