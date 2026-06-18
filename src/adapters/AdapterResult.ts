@@ -1,14 +1,17 @@
+import type { GeneratedFile } from './GeneratedFile.js';
+
 export interface AdapterDetectionResult {
   detected: boolean;
   marker?: string;
 }
 
 export interface AdapterRuntimeArtifact {
-  files: string[];
+  files: GeneratedFile[];
   metadata: Record<string, unknown>;
 }
 
 export interface AdapterFunctionArtifact {
+  files: GeneratedFile[];
   functions: string[];
   metadata: Record<string, unknown>;
 }
@@ -51,6 +54,7 @@ export function createEmptyRuntimeArtifact(): AdapterRuntimeArtifact {
 
 export function createEmptyFunctionArtifact(): AdapterFunctionArtifact {
   return {
+    files: [],
     functions: [],
     metadata: {},
   };

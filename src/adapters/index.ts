@@ -12,6 +12,7 @@ export {
   type AdapterRegistryDetectionResult,
   type AdapterRegistryService,
 } from './AdapterRegistry.js';
+export { type GeneratedFile } from './GeneratedFile.js';
 export {
   createEmptyAdapterResult,
   createEmptyConfigurationArtifact,

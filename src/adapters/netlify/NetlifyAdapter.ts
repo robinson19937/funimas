@@ -2,6 +2,8 @@ import { join } from 'node:path';
 
 import { AdapterCapabilities } from '../AdapterCapabilities.js';
 import type { AdapterContext } from '../AdapterContext.js';
+import type { GeneratedFile } from '../GeneratedFile.js';
+import { renderNetlifyDatabaseInsertHandler } from './templates/database-insert-handler.js';
 import { pathExists } from '../adapter-path.js';
 import type {
   AdapterDetectionResult,
@@ -14,9 +16,11 @@ import {
   createEmptyFunctionArtifact,
   createEmptyRuntimeArtifact,
 } from '../AdapterResult.js';
+import { operationTypeToFileName } from '../../utils/operation-naming.js';
 import { BasePlatformAdapter } from '../PlatformAdapter.js';
 
 const NETLIFY_MARKER = 'netlify.toml';
+const NETLIFY_FUNCTIONS_DIR = 'netlify/functions';
 
 /**
  * Adaptador para proyectos desplegados en Netlify.
@@ -52,9 +56,27 @@ export class NetlifyAdapter extends BasePlatformAdapter {
     return createEmptyAdapterResult(createEmptyRuntimeArtifact());
   }
 
-  async generateFunction(
-    _context: AdapterContext,
-  ): Promise<AdapterResult<AdapterFunctionArtifact>> {
-    return createEmptyAdapterResult(createEmptyFunctionArtifact());
+  async generateFunction(context: AdapterContext): Promise<AdapterResult<AdapterFunctionArtifact>> {
+    const operation = context.operation;
+
+    if (!operation || operation.type !== 'DATABASE_INSERT') {
+      return createEmptyAdapterResult(createEmptyFunctionArtifact());
+    }
+
+    const fileName = `${operationTypeToFileName(operation.type)}.ts`;
+    const file: GeneratedFile = {
+      fileName,
+      relativePath: join(NETLIFY_FUNCTIONS_DIR, fileName),
+      content: renderNetlifyDatabaseInsertHandler(),
+    };
+
+    return createEmptyAdapterResult({
+      files: [file],
+      functions: [fileName],
+      metadata: {
+        operationType: operation.type,
+        platform: this.id,
+      },
+    });
   }
 }

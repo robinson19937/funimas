@@ -1,5 +1,20 @@
-/**
- * Módulo del generador.
- * Reservado para la lógica de generación de código en etapas futuras.
- */
-export {};
+export { FunctionGenerator, type FunctionGeneratorOptions, type FunctionGeneratorService } from './FunctionGenerator.js';
+export { RuntimeGenerator, type RuntimeGeneratorOptions, type RuntimeGeneratorService } from './RuntimeGenerator.js';
+export { SDKGenerator, type SDKGeneratorOptions, type SDKGeneratorService } from './SDKGenerator.js';
+export {
+  ProjectCodeGenerator,
+  type ProjectCodeGeneratorOptions,
+  type ProjectCodeGeneratorService,
+} from './ProjectCodeGenerator.js';
+export { GeneratorContext, type GeneratorContextData } from './GeneratorContext.js';
+export { GeneratorResult, type GeneratorResultData } from './GeneratorResult.js';
+export {
+  GeneratorFileWriter,
+  GeneratorFileWriterError,
+  type WrittenFile,
+} from './GeneratorFileWriter.js';
+export {
+  getSupportedFunctionOperationTypes,
+  isSupportedFunctionOperation,
+  operationTypeToFileName,
+} from './operation-utils.js';

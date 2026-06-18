@@ -1,4 +1,5 @@
 import type { PlannerResult } from '../planner/PlannerResult.js';
+import type { SemanticOperation } from '../semantic/SemanticOperation.js';
 import type { SemanticResult } from '../semantic/SemanticResult.js';
 
 export interface AdapterContextData {
@@ -6,6 +7,7 @@ export interface AdapterContextData {
   workspacePath?: string;
   semanticResult?: SemanticResult;
   plannerResult?: PlannerResult;
+  operation?: SemanticOperation;
 }
 
 /**
@@ -16,12 +18,14 @@ export class AdapterContext {
   readonly workspacePath?: string;
   readonly semanticResult?: SemanticResult;
   readonly plannerResult?: PlannerResult;
+  readonly operation?: SemanticOperation;
 
   constructor(data: AdapterContextData) {
     this.projectPath = data.projectPath;
     this.workspacePath = data.workspacePath;
     this.semanticResult = data.semanticResult;
     this.plannerResult = data.plannerResult;
+    this.operation = data.operation;
   }
 
   getTargetPath(): string {

@@ -11,7 +11,18 @@ import {
 import { BackupEngine, type BackupService } from '../../backup/index.js';
 import { GraphBuilder, type GraphBuilderService } from '../../graph/index.js';
 import type { GraphResult } from '../../graph/GraphResult.js';
+import {
+  FunctionGenerator,
+  GeneratorContext,
+  RuntimeGenerator,
+  SDKGenerator,
+  type FunctionGeneratorService,
+  type RuntimeGeneratorService,
+  type SDKGeneratorService,
+} from '../../generator/index.js';
 import { TransformationPlanner, type TransformationPlannerService } from '../../planner/index.js';
+import { PlannerContext } from '../../planner/PlannerContext.js';
+import { isSupportedFunctionOperation } from '../../generator/operation-utils.js';
 import type { PlannerResult } from '../../planner/PlannerResult.js';
 import { AstParser, type AstParserService } from '../../parser/index.js';
 import { ProjectScanner, type ProjectScannerService } from '../../scanner/index.js';
@@ -34,6 +45,9 @@ export interface ProtectCommandOptions {
   semanticAnalyzer?: SemanticAnalyzerService;
   transformationPlanner?: TransformationPlannerService;
   adapterRegistry?: AdapterRegistryService;
+  runtimeGenerator?: RuntimeGeneratorService;
+  sdkGenerator?: SDKGeneratorService;
+  functionGenerator?: FunctionGeneratorService;
 }
 
 export class ProtectCommand {
@@ -47,6 +61,9 @@ export class ProtectCommand {
   private readonly semanticAnalyzer: SemanticAnalyzerService;
   private readonly transformationPlanner: TransformationPlannerService;
   private readonly adapterRegistry: AdapterRegistryService;
+  private readonly runtimeGenerator: RuntimeGeneratorService;
+  private readonly sdkGenerator: SDKGeneratorService;
+  private readonly functionGenerator: FunctionGeneratorService;
 
   constructor(options: ProtectCommandOptions) {
     this.projectPath = resolve(options.projectPath);
@@ -60,6 +77,9 @@ export class ProtectCommand {
     this.semanticAnalyzer = options.semanticAnalyzer ?? new SemanticAnalyzer();
     this.transformationPlanner = options.transformationPlanner ?? new TransformationPlanner();
     this.adapterRegistry = options.adapterRegistry ?? createDefaultAdapterRegistry();
+    this.runtimeGenerator = options.runtimeGenerator ?? new RuntimeGenerator();
+    this.sdkGenerator = options.sdkGenerator ?? new SDKGenerator();
+    this.functionGenerator = options.functionGenerator ?? new FunctionGenerator();
   }
 
   async execute(): Promise<PlannerResult> {
@@ -111,6 +131,56 @@ export class ProtectCommand {
     );
 
     this.printAdapterSummary(adapterDetection);
+
+    if (adapterDetection.adapter) {
+      const generatorContext = new GeneratorContext({
+        projectPath: this.projectPath,
+        workspacePath: workspaceResult.workspaceProject,
+        semanticResult,
+        adapter: adapterDetection.adapter,
+      });
+
+      this.output.writeln('Generando Runtime...');
+      this.output.writeln();
+      await this.runtimeGenerator.generate(generatorContext);
+      this.output.writeln('✔ Runtime');
+      this.output.writeln();
+
+      this.output.writeln('Generando SDK...');
+      this.output.writeln();
+      await this.sdkGenerator.generate(generatorContext);
+      this.output.writeln('✔ SDK');
+      this.output.writeln();
+
+      this.output.writeln('Generando Functions...');
+      this.output.writeln();
+
+      const plannerContext = new PlannerContext(semanticResult);
+      const processedOperationTypes = new Set<string>();
+
+      for (const operation of plannerContext.getTransformableOperations()) {
+        if (!isSupportedFunctionOperation(operation.type)) {
+          continue;
+        }
+
+        if (processedOperationTypes.has(operation.type)) {
+          continue;
+        }
+
+        processedOperationTypes.add(operation.type);
+
+        const functionResult = await this.functionGenerator.generate(
+          generatorContext,
+          operation,
+          adapterDetection.adapter,
+        );
+
+        for (const fileName of functionResult.functionFileNames) {
+          this.output.writeln(`✔ ${fileName}`);
+          this.output.writeln();
+        }
+      }
+    }
 
     return plannerResult;
   }

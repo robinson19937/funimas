@@ -20,6 +20,12 @@ import { createEmptyActionsByType } from '../src/planner/PlannerResult.js';
 import type { TransformationPlannerService } from '../src/planner/TransformationPlanner.js';
 import { NetlifyAdapter } from '../src/adapters/index.js';
 import type { AdapterRegistryService } from '../src/adapters/index.js';
+import { GeneratorResult } from '../src/generator/GeneratorResult.js';
+import type {
+  FunctionGeneratorService,
+  RuntimeGeneratorService,
+  SDKGeneratorService,
+} from '../src/generator/index.js';
 import { WorkspaceResult } from '../src/workspace/WorkspaceResult.js';
 import type { WorkspaceService } from '../src/workspace/WorkspaceEngine.js';
 import type { OutputWriter } from '../src/utils/output.js';
@@ -215,6 +221,42 @@ describe('ProtectCommand', () => {
         adapter: new NetlifyAdapter(),
       }),
     };
+    const runtimeGenerator: RuntimeGeneratorService = {
+      generate: vi.fn().mockResolvedValue(
+        new GeneratorResult({
+          files: [],
+          runtimeGenerated: true,
+          sdkGenerated: false,
+          functionFileNames: [],
+          startedAt: new Date('2026-06-18T14:35:34.000Z'),
+          finishedAt: new Date('2026-06-18T14:35:34.000Z'),
+        }),
+      ),
+    };
+    const sdkGenerator: SDKGeneratorService = {
+      generate: vi.fn().mockResolvedValue(
+        new GeneratorResult({
+          files: [],
+          runtimeGenerated: false,
+          sdkGenerated: true,
+          functionFileNames: [],
+          startedAt: new Date('2026-06-18T14:35:35.000Z'),
+          finishedAt: new Date('2026-06-18T14:35:35.000Z'),
+        }),
+      ),
+    };
+    const functionGenerator: FunctionGeneratorService = {
+      generate: vi.fn().mockResolvedValue(
+        new GeneratorResult({
+          files: [],
+          runtimeGenerated: false,
+          sdkGenerated: false,
+          functionFileNames: ['database_insert.ts'],
+          startedAt: new Date('2026-06-18T14:35:36.000Z'),
+          finishedAt: new Date('2026-06-18T14:35:36.000Z'),
+        }),
+      ),
+    };
 
     const command = new ProtectCommand({
       projectPath: './mi-proyecto',
@@ -227,6 +269,9 @@ describe('ProtectCommand', () => {
       semanticAnalyzer,
       transformationPlanner,
       adapterRegistry,
+      runtimeGenerator,
+      sdkGenerator,
+      functionGenerator,
     });
 
     const result = await command.execute();
@@ -262,5 +307,12 @@ describe('ProtectCommand', () => {
     expect(output.lines).toContain('✔ Runtime');
     expect(output.lines).toContain('✔ Functions');
     expect(output.lines).toContain('✔ Environment');
+    expect(output.lines).toContain('Generando Runtime...');
+    expect(output.lines).toContain('Generando SDK...');
+    expect(output.lines).toContain('Generando Functions...');
+    expect(output.lines).toContain('✔ database_insert.ts');
+    expect(runtimeGenerator.generate).toHaveBeenCalledOnce();
+    expect(sdkGenerator.generate).toHaveBeenCalledOnce();
+    expect(functionGenerator.generate).toHaveBeenCalledOnce();
   });
 });
