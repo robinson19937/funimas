@@ -19,6 +19,7 @@ import {
   GeneratedFileVerifier,
   GenerationVerificationError,
   SDKGenerator,
+  WorkspaceConfigGenerator,
   type FunctionGeneratorService,
   type SDKGeneratorService,
 } from '../generator/index.js';
@@ -71,6 +72,7 @@ export interface ProtectPipelineOptions {
   rollbackManager?: RollbackManagerService;
   databaseInsertFunctionGenerator?: DatabaseInsertFunctionGenerator;
   generatedFileVerifier?: GeneratedFileVerifier;
+  workspaceConfigGenerator?: WorkspaceConfigGenerator;
 }
 
 export class ProtectPipeline {
@@ -94,6 +96,7 @@ export class ProtectPipeline {
   private readonly rollbackManager: RollbackManagerService;
   private readonly databaseInsertFunctionGenerator: DatabaseInsertFunctionGenerator;
   private readonly generatedFileVerifier: GeneratedFileVerifier;
+  private readonly workspaceConfigGenerator: WorkspaceConfigGenerator;
   private readonly executionId: string;
 
   constructor(options: ProtectPipelineOptions) {
@@ -120,6 +123,8 @@ export class ProtectPipeline {
     this.databaseInsertFunctionGenerator =
       options.databaseInsertFunctionGenerator ?? new DatabaseInsertFunctionGenerator();
     this.generatedFileVerifier = options.generatedFileVerifier ?? new GeneratedFileVerifier();
+    this.workspaceConfigGenerator =
+      options.workspaceConfigGenerator ?? new WorkspaceConfigGenerator();
     this.executionId = randomUUID();
   }
 
@@ -401,6 +406,15 @@ export class ProtectPipeline {
     this.output.writeln(`Versión: ${VERSION}`);
     this.output.writeln(`Reportes: ${summary.reportsDirectory}`);
     this.output.writeln();
+
+    if (summary.validationResult.valid) {
+      this.output.writeln('Próximo paso para producción:');
+      this.output.writeln();
+      this.output.writeln(`  cd ${summary.workspaceResult.workspaceProject}`);
+      this.output.writeln('  npm install');
+      this.output.writeln('  netlify deploy');
+      this.output.writeln();
+    }
   }
 
   private printWorkspaceSummary(workspaceResult: WorkspaceResult): void {
@@ -579,6 +593,18 @@ export class ProtectPipeline {
     history: TransformationHistory;
   }): Promise<void> {
     const { adapter, generatorContext, workspacePath, history } = options;
+
+    this.output.writeln('Preparando configuración del workspace...');
+    this.output.writeln();
+
+    const workspaceConfig = await this.workspaceConfigGenerator.generate(generatorContext);
+
+    this.output.writeln('✔ tsconfig.json');
+    this.output.writeln();
+    this.output.writeln(`✔ ${workspaceConfig.typesRelativePath}`);
+    this.output.writeln();
+    this.output.writeln('✔ package.json');
+    this.output.writeln();
 
     this.output.writeln('Generando Functions...');
     this.output.writeln();

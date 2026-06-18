@@ -1,5 +1,5 @@
 import { access } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import type { ValidationContext } from '../ValidationContext.js';
 import { ValidationError } from '../ValidationError.js';
@@ -29,17 +29,13 @@ export class GeneratedFilesRule implements ValidationRule {
     for (const record of generationRecords) {
       const pathsToCheck = [
         ...record.generatedFiles,
-        record.file.startsWith(workspaceRoot)
-          ? record.file.replace(`${workspaceRoot}/`, '')
-          : record.file,
-      ];
+        this.toWorkspaceRelativePath(workspaceRoot, record.file),
+      ].filter((path): path is string => Boolean(path));
 
       for (const relativePath of [...new Set(pathsToCheck)]) {
-        if (!relativePath || relativePath.startsWith('/')) {
-          continue;
-        }
-
-        const absolutePath = join(workspaceRoot, relativePath);
+        const absolutePath = isAbsolute(relativePath)
+          ? resolve(relativePath)
+          : join(workspaceRoot, relativePath);
         filesEvaluated.push(relativePath);
 
         try {
@@ -63,5 +59,34 @@ export class GeneratedFilesRule implements ValidationRule {
       filesEvaluated: [...new Set(filesEvaluated)],
       errors,
     };
+  }
+
+  private toWorkspaceRelativePath(workspaceRoot: string, filePath: string): string | undefined {
+    if (!filePath) {
+      return undefined;
+    }
+
+    const normalizedRoot = resolve(workspaceRoot);
+    const normalizedPath = resolve(filePath);
+
+    if (normalizedPath === normalizedRoot) {
+      return undefined;
+    }
+
+    const normalizedRootLower = normalizedRoot.toLowerCase();
+    const normalizedPathLower = normalizedPath.toLowerCase();
+
+    if (
+      normalizedPathLower.startsWith(`${normalizedRootLower}\\`) ||
+      normalizedPathLower.startsWith(`${normalizedRootLower}/`)
+    ) {
+      return relative(normalizedRoot, normalizedPath);
+    }
+
+    if (!isAbsolute(filePath)) {
+      return filePath;
+    }
+
+    return undefined;
   }
 }
