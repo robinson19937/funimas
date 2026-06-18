@@ -32,6 +32,16 @@ describe('CliApp', () => {
     expect(exitCode).toBe(0);
   });
 
+  it('devuelve código de salida 1 cuando la ruta del proyecto no existe', async () => {
+    const app = new CliApp({
+      argv: ['node', 'funimas', 'protect', '/ruta/inexistente/funimas'],
+    });
+
+    const exitCode = await app.run();
+
+    expect(exitCode).toBe(1);
+  });
+
   it('devuelve código de salida 1 cuando falta la ruta del proyecto', async () => {
     const app = new CliApp({
       argv: ['node', 'funimas', 'protect'],

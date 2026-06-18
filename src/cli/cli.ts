@@ -1,4 +1,5 @@
 import { ProtectCommand } from './commands/protect-command.js';
+import { ProjectFsError, ProjectValidator } from '../pipeline/ProjectValidator.js';
 
 export interface CliOptions {
   argv?: string[];
@@ -40,9 +41,22 @@ export class CliApp {
       return 1;
     }
 
-    const command = new ProtectCommand({ projectPath });
-    await command.execute();
-    return 0;
+    try {
+      const validator = new ProjectValidator();
+      const validation = await validator.validate(projectPath);
+      const command = new ProtectCommand({ projectPath: validation.projectPath });
+
+      await command.executePipeline();
+
+      return 0;
+    } catch (error) {
+      if (error instanceof ProjectFsError) {
+        console.error(`Error: ${error.message}`);
+        return 1;
+      }
+
+      throw error;
+    }
   }
 
   private printUsage(): void {

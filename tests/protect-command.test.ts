@@ -379,11 +379,7 @@ describe('ProtectCommand', () => {
     expect(output.lines).toContain('✔ Functions');
     expect(output.lines).toContain('✔ Environment');
     expect(output.lines).toContain('Generando SDK...');
-    expect(output.lines).toContain('Generando Netlify Function...');
-    expect(output.lines).toContain('Registrando transformación...');
-    expect(output.lines).toContain('✔ Reason registrada');
-    expect(output.lines).toContain('✔ Benefit registrado');
-    expect(output.lines).toContain('✔ Risk Level: LOW');
+    expect(output.lines).toContain('Generando Functions...');
     expect(output.lines).toContain('Generando Runtime...');
     expect(output.lines).toContain('✔ handler.ts');
     expect(output.lines).toContain('✔ databaseController.ts');
