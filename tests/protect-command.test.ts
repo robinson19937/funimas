@@ -21,6 +21,7 @@ import type { TransformationPlannerService } from '../src/planner/Transformation
 import { NetlifyAdapter } from '../src/adapters/index.js';
 import type { AdapterRegistryService } from '../src/adapters/index.js';
 import { GeneratorResult } from '../src/generator/GeneratorResult.js';
+import { GeneratedFileVerifier } from '../src/generator/GeneratedFileVerifier.js';
 import type {
   FunctionGeneratorService,
   SDKGeneratorService,
@@ -326,6 +327,13 @@ describe('ProtectCommand', () => {
       }),
     };
 
+    const generatedFileVerifier = {
+      verifyExists: vi.fn().mockResolvedValue('/tmp/mi-proyecto_funimas/runtime/handler.ts'),
+      verifyWrittenFile: vi.fn().mockResolvedValue(undefined),
+      verifyWrittenFiles: vi.fn().mockResolvedValue(undefined),
+      verifyPaths: vi.fn().mockResolvedValue(undefined),
+    } as unknown as GeneratedFileVerifier;
+
     const command = new ProtectCommand({
       projectPath: './mi-proyecto',
       output,
@@ -343,6 +351,7 @@ describe('ProtectCommand', () => {
       codeRewriter,
       changeReportGenerator,
       databaseInsertFunctionGenerator,
+      generatedFileVerifier,
     });
 
     const result = await command.execute();

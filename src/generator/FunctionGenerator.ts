@@ -30,7 +30,7 @@ export class FunctionGenerator implements FunctionGeneratorService {
   private readonly now: () => Date;
 
   constructor(options: FunctionGeneratorOptions = {}) {
-    this.fileWriter = options.fileWriter ?? new GeneratorFileWriter();
+    this.fileWriter = options.fileWriter ?? new GeneratorFileWriter({ generatorName: 'FunctionGenerator' });
     this.databaseInsertGenerator =
       options.databaseInsertGenerator ?? new DatabaseInsertFunctionGenerator({
         fileWriter: this.fileWriter,

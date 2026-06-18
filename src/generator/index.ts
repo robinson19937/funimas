@@ -11,8 +11,14 @@ export { GeneratorResult, type GeneratorResultData } from './GeneratorResult.js'
 export {
   GeneratorFileWriter,
   GeneratorFileWriterError,
+  type GeneratorFileWriterOptions,
   type WrittenFile,
 } from './GeneratorFileWriter.js';
+export {
+  GeneratedFileVerifier,
+  GenerationVerificationError,
+  type VerifiableWrittenFile,
+} from './GeneratedFileVerifier.js';
 export {
   getSupportedFunctionOperationTypes,
   isSupportedFunctionOperation,

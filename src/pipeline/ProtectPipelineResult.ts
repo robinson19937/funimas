@@ -14,4 +14,5 @@ export interface ProtectPipelineResult {
   durationMs: number;
   transformationsRegistered: number;
   reportsDirectory: string;
+  generationError?: string;
 }

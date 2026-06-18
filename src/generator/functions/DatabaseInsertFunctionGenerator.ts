@@ -56,7 +56,9 @@ export class DatabaseInsertFunctionGenerator implements DatabaseInsertFunctionGe
 
   constructor(options: DatabaseInsertFunctionGeneratorOptions = {}) {
     this.templateEngine = options.templateEngine ?? new RuntimeTemplateEngine();
-    this.fileWriter = options.fileWriter ?? new GeneratorFileWriter();
+    this.fileWriter =
+      options.fileWriter ??
+      new GeneratorFileWriter({ generatorName: 'DatabaseInsertFunctionGenerator' });
     this.now = options.now ?? (() => new Date());
   }
 
@@ -91,12 +93,7 @@ export class DatabaseInsertFunctionGenerator implements DatabaseInsertFunctionGe
         generatedAt,
         templateUsed: `templates/${TEMPLATE_PATH}`,
         compilerVersion: VERSION,
-        relatedGeneratedFiles: [
-          relativePath,
-          'runtime/handler.ts',
-          'runtime/controllers/databaseController.ts',
-          'sdk/index.ts',
-        ],
+        relatedGeneratedFiles: [relativePath],
       },
     };
   }

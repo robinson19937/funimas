@@ -23,7 +23,7 @@ export class SDKGenerator implements SDKGeneratorService {
   private readonly now: () => Date;
 
   constructor(options: SDKGeneratorOptions = {}) {
-    this.fileWriter = options.fileWriter ?? new GeneratorFileWriter();
+    this.fileWriter = options.fileWriter ?? new GeneratorFileWriter({ generatorName: 'SDKGenerator' });
     this.now = options.now ?? (() => new Date());
   }
 
