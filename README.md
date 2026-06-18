@@ -44,6 +44,7 @@ Inicializa la protección de un proyecto siguiendo este flujo:
 3. **AST Parser** para cargar el proyecto con ts-morph
 4. **Project Scanner** para construir el índice interno del proyecto
 5. **Dependency Graph** para mapear relaciones entre archivos
+6. **Semantic Analyzer** para detectar operaciones semánticas mediante reglas extensibles
 
 ```
 Funimas
@@ -81,9 +82,26 @@ Construyendo Dependency Graph...
 ✔ Relaciones: 214
 
 ✔ Componentes: 1
+
+Análisis semántico
+
+✔ Firebase detectado
+
+✔ Firestore
+Insert: 6
+Update: 2
+Delete: 1
+Read: 8
+
+✔ Authentication
+Login: 2
+Register: 1
+
+✔ Storage
+Upload: 3
 ```
 
-Tanto el backup como el workspace excluyen automáticamente: `node_modules`, `.git`, `.funimas`, `dist` y `coverage`. El parser, el scanner y el grafo de dependencias utilizan el índice del proyecto sin modificar archivos.
+Tanto el backup como el workspace excluyen automáticamente: `node_modules`, `.git`, `.funimas`, `dist` y `coverage`. El análisis semántico utiliza un motor de reglas extensible sin modificar archivos del proyecto.
 
 ## Estructura del proyecto
 
