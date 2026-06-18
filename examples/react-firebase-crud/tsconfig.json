@@ -12,5 +12,5 @@
       "@funimas/sdk": ["./sdk/index.ts"]
     }
   },
-  "include": ["src/**/*", "sdk/**/*", "runtime/**/*"]
+  "include": ["src/**/*", "sdk/**/*", "runtime/**/*", "netlify/**/*"]
 }

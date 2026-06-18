@@ -8,7 +8,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      include: ['src/adapters/**/*.ts', 'src/planner/**/*.ts'],
+      include: ['src/runtime/**/*.ts', 'src/history/**/*.ts', 'src/report/**/*.ts'],
       thresholds: {
         lines: 90,
         functions: 90,

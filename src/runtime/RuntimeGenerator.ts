@@ -1,0 +1,98 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+
+import type { RuntimeContext } from './RuntimeContext.js';
+import { RuntimeResult } from './RuntimeResult.js';
+import { RuntimeTemplateEngine } from './RuntimeTemplateEngine.js';
+
+export interface RuntimeFileDefinition {
+  templatePath: string;
+  outputPath: string;
+}
+
+export const RUNTIME_FILE_DEFINITIONS: RuntimeFileDefinition[] = [
+  { templatePath: 'runtime/handler.hbs', outputPath: 'runtime/handler.ts' },
+  { templatePath: 'runtime/router.hbs', outputPath: 'runtime/router.ts' },
+  {
+    templatePath: 'runtime/controllers/databaseController.hbs',
+    outputPath: 'runtime/controllers/databaseController.ts',
+  },
+  {
+    templatePath: 'runtime/repositories/firestoreRepository.hbs',
+    outputPath: 'runtime/repositories/firestoreRepository.ts',
+  },
+  { templatePath: 'runtime/models/Request.hbs', outputPath: 'runtime/models/Request.ts' },
+  { templatePath: 'runtime/models/Response.hbs', outputPath: 'runtime/models/Response.ts' },
+];
+
+export interface RuntimeGeneratorOptions {
+  templateEngine?: RuntimeTemplateEngine;
+  fileDefinitions?: RuntimeFileDefinition[];
+  now?: () => Date;
+}
+
+export interface RuntimeGeneratorService {
+  generate(context: RuntimeContext): Promise<RuntimeResult>;
+}
+
+/**
+ * Genera el backend runtime dentro del workspace usando plantillas Handlebars.
+ */
+export class RuntimeGenerator implements RuntimeGeneratorService {
+  private readonly templateEngine: RuntimeTemplateEngine;
+  private readonly fileDefinitions: RuntimeFileDefinition[];
+  private readonly now: () => Date;
+
+  constructor(options: RuntimeGeneratorOptions = {}) {
+    this.templateEngine = options.templateEngine ?? new RuntimeTemplateEngine();
+    this.fileDefinitions = options.fileDefinitions ?? RUNTIME_FILE_DEFINITIONS;
+    this.now = options.now ?? (() => new Date());
+  }
+
+  async generate(context: RuntimeContext): Promise<RuntimeResult> {
+    const startedAt = this.now();
+    const workspaceRoot = resolve(context.workspacePath);
+    const generatedFiles: RuntimeResult['generatedFiles'] = [];
+
+    for (const definition of this.fileDefinitions) {
+      const content = await this.templateEngine.render(definition.templatePath);
+      const absolutePath = resolve(workspaceRoot, definition.outputPath);
+
+      if (!absolutePath.startsWith(workspaceRoot)) {
+        throw new Error(`No se puede escribir fuera del workspace: ${definition.outputPath}`);
+      }
+
+      await mkdir(dirname(absolutePath), { recursive: true });
+      await writeFile(absolutePath, `${content}\n`, 'utf8');
+
+      const fileName = definition.outputPath.split('/').pop() ?? definition.outputPath;
+
+      generatedFiles.push({
+        fileName,
+        relativePath: definition.outputPath,
+        absolutePath,
+      });
+
+      if (context.history) {
+        await context.history.record({
+          file: absolutePath,
+          operation: 'GENERATE_RUNTIME',
+          rewriteRule: 'RuntimeGenerator',
+          before: '',
+          after: content,
+          generatedFiles: [definition.outputPath],
+          modifiedImports: [],
+          status: 'COMPLETED',
+        });
+      }
+    }
+
+    const finishedAt = this.now();
+
+    return new RuntimeResult({
+      generatedFiles,
+      startedAt,
+      finishedAt,
+    });
+  }
+}

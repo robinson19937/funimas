@@ -23,9 +23,10 @@ import type { AdapterRegistryService } from '../src/adapters/index.js';
 import { GeneratorResult } from '../src/generator/GeneratorResult.js';
 import type {
   FunctionGeneratorService,
-  RuntimeGeneratorService,
   SDKGeneratorService,
 } from '../src/generator/index.js';
+import { RuntimeResult } from '../src/runtime/RuntimeResult.js';
+import type { RuntimeGeneratorService } from '../src/runtime/index.js';
 import { RewriteResult, createEmptyOperationsRewritten } from '../src/rewriter/RewriteResult.js';
 import type { CodeRewriterService } from '../src/rewriter/index.js';
 import { WorkspaceResult } from '../src/workspace/WorkspaceResult.js';
@@ -223,15 +224,33 @@ describe('ProtectCommand', () => {
         adapter: new NetlifyAdapter(),
       }),
     };
-    const runtimeGenerator: RuntimeGeneratorService = {
+    const backendRuntimeGenerator: RuntimeGeneratorService = {
       generate: vi.fn().mockResolvedValue(
-        new GeneratorResult({
-          files: [],
-          runtimeGenerated: true,
-          sdkGenerated: false,
-          functionFileNames: [],
+        new RuntimeResult({
+          generatedFiles: [
+            {
+              fileName: 'handler.ts',
+              relativePath: 'runtime/handler.ts',
+              absolutePath: '/tmp/mi-proyecto_funimas/runtime/handler.ts',
+            },
+            {
+              fileName: 'router.ts',
+              relativePath: 'runtime/router.ts',
+              absolutePath: '/tmp/mi-proyecto_funimas/runtime/router.ts',
+            },
+            {
+              fileName: 'databaseController.ts',
+              relativePath: 'runtime/controllers/databaseController.ts',
+              absolutePath: '/tmp/mi-proyecto_funimas/runtime/controllers/databaseController.ts',
+            },
+            {
+              fileName: 'firestoreRepository.ts',
+              relativePath: 'runtime/repositories/firestoreRepository.ts',
+              absolutePath: '/tmp/mi-proyecto_funimas/runtime/repositories/firestoreRepository.ts',
+            },
+          ],
           startedAt: new Date('2026-06-18T14:35:34.000Z'),
-          finishedAt: new Date('2026-06-18T14:35:34.000Z'),
+          finishedAt: new Date('2026-06-18T14:35:34.500Z'),
         }),
       ),
     };
@@ -276,6 +295,15 @@ describe('ProtectCommand', () => {
       ),
     };
 
+    const changeReportGenerator = {
+      generate: vi.fn().mockResolvedValue({
+        markdownPath: '/tmp/report/changes.md',
+        htmlPath: '/tmp/report/changes.html',
+        summaryPath: '/tmp/report/summary.json',
+        summary: {},
+      }),
+    };
+
     const command = new ProtectCommand({
       projectPath: './mi-proyecto',
       output,
@@ -287,10 +315,11 @@ describe('ProtectCommand', () => {
       semanticAnalyzer,
       transformationPlanner,
       adapterRegistry,
-      runtimeGenerator,
+      backendRuntimeGenerator,
       sdkGenerator,
       functionGenerator,
       codeRewriter,
+      changeReportGenerator,
     });
 
     const result = await command.execute();
@@ -326,11 +355,14 @@ describe('ProtectCommand', () => {
     expect(output.lines).toContain('✔ Runtime');
     expect(output.lines).toContain('✔ Functions');
     expect(output.lines).toContain('✔ Environment');
-    expect(output.lines).toContain('Generando Runtime...');
     expect(output.lines).toContain('Generando SDK...');
     expect(output.lines).toContain('Generando Functions...');
+    expect(output.lines).toContain('Generando Runtime...');
+    expect(output.lines).toContain('✔ handler.ts');
+    expect(output.lines).toContain('✔ databaseController.ts');
+    expect(output.lines).toContain('✔ firestoreRepository.ts');
     expect(output.lines).toContain('✔ database_insert.ts');
-    expect(runtimeGenerator.generate).toHaveBeenCalledOnce();
+    expect(backendRuntimeGenerator.generate).toHaveBeenCalledOnce();
     expect(sdkGenerator.generate).toHaveBeenCalledOnce();
     expect(functionGenerator.generate).toHaveBeenCalledOnce();
     expect(output.lines).toContain('Reescribiendo código...');
@@ -338,5 +370,10 @@ describe('ProtectCommand', () => {
     expect(output.lines).toContain('Operaciones transformadas:');
     expect(output.lines).toContain('DATABASE_INSERT: 1');
     expect(codeRewriter.rewrite).toHaveBeenCalledOnce();
+    expect(output.lines).toContain('Registrando transformaciones...');
+    expect(output.lines).toContain('Generando reporte...');
+    expect(output.lines).toContain('✔ changes.md');
+    expect(output.lines).toContain('✔ summary.json');
+    expect(changeReportGenerator.generate).toHaveBeenCalledOnce();
   });
 });

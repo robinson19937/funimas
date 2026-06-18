@@ -1,5 +1,6 @@
-/**
- * Módulo de reportes.
- * Reservado para la generación de informes en etapas futuras.
- */
-export {};
+export {
+  ChangeReportGenerator,
+  type ChangeReportGeneratorOptions,
+  type ChangeReportResult,
+  type ChangeReportSummary,
+} from './ChangeReportGenerator.js';

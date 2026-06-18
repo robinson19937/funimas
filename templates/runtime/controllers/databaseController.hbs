@@ -1,0 +1,13 @@
+import { FirestoreRepository } from '../repositories/firestoreRepository.js';
+import type { Request } from '../models/Request.js';
+import type { Response } from '../models/Response.js';
+
+export function createDatabaseController() {
+  const repository = new FirestoreRepository();
+
+  return {
+    async insert(request: Request): Promise<Response> {
+      return repository.insert(request);
+    },
+  };
+}

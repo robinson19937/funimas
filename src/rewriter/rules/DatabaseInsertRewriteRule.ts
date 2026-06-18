@@ -1,11 +1,12 @@
 import type { SemanticOperation } from '../../semantic/SemanticOperation.js';
+import type { RewriteApplication } from '../RewriteApplication.js';
 import type { RewriteContext } from '../RewriteContext.js';
 import type { RewriteRule } from '../RewriteRule.js';
 import { extractCollectionName, findCallExpressionAt } from '../rewrite-utils.js';
 
 export class DatabaseInsertRewriteRule implements RewriteRule {
   readonly id = 'database-insert-rewrite';
-  readonly name = 'Database Insert Rewrite Rule';
+  readonly name = 'DatabaseInsertRewriteRule';
 
   canApply(operation: SemanticOperation): boolean {
     return (
@@ -14,36 +15,42 @@ export class DatabaseInsertRewriteRule implements RewriteRule {
     );
   }
 
-  async apply(context: RewriteContext, operation: SemanticOperation): Promise<boolean> {
+  async apply(context: RewriteContext, operation: SemanticOperation): Promise<RewriteApplication | null> {
     const project = context.getMorphProject();
     const sourceFile = project.getSourceFile(operation.file);
 
     if (!sourceFile) {
-      return false;
+      return null;
     }
 
     const callExpression = findCallExpressionAt(sourceFile, operation.line, operation.column);
 
     if (!callExpression || callExpression.getExpression().getText() !== 'addDoc') {
-      return false;
+      return null;
     }
 
     const dataArgument = callExpression.getArguments()[1];
 
     if (!dataArgument) {
-      return false;
+      return null;
     }
 
     const collectionName = extractCollectionName(callExpression);
 
     if (!collectionName) {
-      return false;
+      return null;
     }
 
-    callExpression.replaceWithText(
-      `Funimas.database.insert(${collectionName}, ${dataArgument.getText()})`,
-    );
+    const before = callExpression.getText();
+    const after = `Funimas.database.insert(${collectionName}, ${dataArgument.getText()})`;
 
-    return true;
+    callExpression.replaceWithText(after);
+
+    return {
+      before,
+      after,
+      ruleId: this.id,
+      ruleName: this.name,
+    };
   }
 }

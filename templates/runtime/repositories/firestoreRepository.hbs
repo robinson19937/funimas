@@ -1,0 +1,12 @@
+import type { Request } from '../models/Request.js';
+import type { Response } from '../models/Response.js';
+
+export class FirestoreRepository {
+  async insert(request: Request): Promise<Response> {
+    return {
+      success: true,
+      collection: request.collection,
+      data: request.data,
+    };
+  }
+}

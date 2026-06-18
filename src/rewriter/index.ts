@@ -9,5 +9,6 @@ export {
   type RewriteResultData,
 } from './RewriteResult.js';
 export type { RewriteRule } from './RewriteRule.js';
+export type { RewriteApplication } from './RewriteApplication.js';
 export { DatabaseInsertRewriteRule } from './rules/DatabaseInsertRewriteRule.js';
 export { extractCollectionName, findCallExpressionAt } from './rewrite-utils.js';

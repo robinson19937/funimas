@@ -2,10 +2,17 @@ import { TsMorphProjectLoader } from '../parser/TsMorphProjectLoader.js';
 
 import { Formatter } from './Formatter.js';
 import { ImportManager } from './ImportManager.js';
+import type { RewriteApplication } from './RewriteApplication.js';
 import type { RewriteContext } from './RewriteContext.js';
 import { RewriteRegistry } from './RewriteRegistry.js';
 import { RewriteResult, createEmptyOperationsRewritten } from './RewriteResult.js';
 import { DatabaseInsertRewriteRule } from './rules/DatabaseInsertRewriteRule.js';
+import type { SemanticOperation } from '../semantic/SemanticOperation.js';
+
+interface PendingRewrite {
+  operation: SemanticOperation;
+  application: RewriteApplication;
+}
 
 export interface CodeRewriterOptions {
   registry?: RewriteRegistry;
@@ -47,6 +54,7 @@ export class CodeRewriter implements CodeRewriterService {
     const modifiedFilePaths = new Set<string>();
     const importsAdded: string[] = [];
     const importsRemoved: string[] = [];
+    const pendingRewrites: PendingRewrite[] = [];
 
     for (const operation of context.getRewriteableOperations()) {
       const rule = this.registry.findRule(operation);
@@ -55,14 +63,15 @@ export class CodeRewriter implements CodeRewriterService {
         continue;
       }
 
-      const applied = await rule.apply(context, operation);
+      const application = await rule.apply(context, operation);
 
-      if (!applied) {
+      if (!application) {
         continue;
       }
 
       operationsRewritten[operation.type] += 1;
       modifiedFilePaths.add(operation.file);
+      pendingRewrites.push({ operation, application });
     }
 
     const modifiedFiles: string[] = [];
@@ -74,13 +83,43 @@ export class CodeRewriter implements CodeRewriterService {
         continue;
       }
 
+      const fileImportsAdded: string[] = [];
+      const fileImportsRemoved: string[] = [];
+
       if (this.importManager.ensureFunimasImport(sourceFile)) {
+        fileImportsAdded.push('@funimas/sdk:Funimas');
         importsAdded.push('@funimas/sdk:Funimas');
       }
 
-      importsRemoved.push(...this.importManager.removeUnusedImports(sourceFile));
+      const removed = this.importManager.removeUnusedImports(sourceFile);
+
+      fileImportsRemoved.push(...removed);
+      importsRemoved.push(...removed);
+
       this.formatter.formatAndSave(sourceFile);
       modifiedFiles.push(this.importManager.getDisplayFileName(filePath));
+
+      if (context.history) {
+        const modifiedImports = [
+          ...fileImportsAdded,
+          ...fileImportsRemoved.map((importName) => `-${importName}`),
+        ];
+
+        for (const pendingRewrite of pendingRewrites.filter(
+          (pending) => pending.operation.file === filePath,
+        )) {
+          await context.history.record({
+            file: filePath,
+            operation: pendingRewrite.operation.type,
+            rewriteRule: pendingRewrite.application.ruleName,
+            before: pendingRewrite.application.before,
+            after: pendingRewrite.application.after,
+            generatedFiles: [],
+            modifiedImports,
+            status: 'COMPLETED',
+          });
+        }
+      }
     }
 
     const finishedAt = this.now();

@@ -14,12 +14,13 @@ import type { GraphResult } from '../../graph/GraphResult.js';
 import {
   FunctionGenerator,
   GeneratorContext,
-  RuntimeGenerator,
   SDKGenerator,
   type FunctionGeneratorService,
-  type RuntimeGeneratorService,
   type SDKGeneratorService,
 } from '../../generator/index.js';
+import { TransformationHistory } from '../../history/index.js';
+import { ChangeReportGenerator } from '../../report/index.js';
+import { RuntimeGenerator, RuntimeContext, type RuntimeGeneratorService } from '../../runtime/index.js';
 import { CodeRewriter, RewriteContext, type CodeRewriterService } from '../../rewriter/index.js';
 import type { RewriteResult } from '../../rewriter/RewriteResult.js';
 import { TransformationPlanner, type TransformationPlannerService } from '../../planner/index.js';
@@ -47,10 +48,11 @@ export interface ProtectCommandOptions {
   semanticAnalyzer?: SemanticAnalyzerService;
   transformationPlanner?: TransformationPlannerService;
   adapterRegistry?: AdapterRegistryService;
-  runtimeGenerator?: RuntimeGeneratorService;
   sdkGenerator?: SDKGeneratorService;
   functionGenerator?: FunctionGeneratorService;
   codeRewriter?: CodeRewriterService;
+  backendRuntimeGenerator?: RuntimeGeneratorService;
+  changeReportGenerator?: ChangeReportGenerator;
 }
 
 export class ProtectCommand {
@@ -64,10 +66,11 @@ export class ProtectCommand {
   private readonly semanticAnalyzer: SemanticAnalyzerService;
   private readonly transformationPlanner: TransformationPlannerService;
   private readonly adapterRegistry: AdapterRegistryService;
-  private readonly runtimeGenerator: RuntimeGeneratorService;
   private readonly sdkGenerator: SDKGeneratorService;
   private readonly functionGenerator: FunctionGeneratorService;
   private readonly codeRewriter: CodeRewriterService;
+  private readonly backendRuntimeGenerator: RuntimeGeneratorService;
+  private readonly changeReportGenerator: ChangeReportGenerator;
 
   constructor(options: ProtectCommandOptions) {
     this.projectPath = resolve(options.projectPath);
@@ -81,13 +84,15 @@ export class ProtectCommand {
     this.semanticAnalyzer = options.semanticAnalyzer ?? new SemanticAnalyzer();
     this.transformationPlanner = options.transformationPlanner ?? new TransformationPlanner();
     this.adapterRegistry = options.adapterRegistry ?? createDefaultAdapterRegistry();
-    this.runtimeGenerator = options.runtimeGenerator ?? new RuntimeGenerator();
     this.sdkGenerator = options.sdkGenerator ?? new SDKGenerator();
     this.functionGenerator = options.functionGenerator ?? new FunctionGenerator();
     this.codeRewriter = options.codeRewriter ?? new CodeRewriter();
+    this.backendRuntimeGenerator = options.backendRuntimeGenerator ?? new RuntimeGenerator();
+    this.changeReportGenerator = options.changeReportGenerator ?? new ChangeReportGenerator();
   }
 
   async execute(): Promise<PlannerResult> {
+    const pipelineStartedAt = new Date();
     await this.backupEngine.create(this.projectPath);
     const workspaceResult = await this.workspaceEngine.create(this.projectPath);
 
@@ -137,6 +142,9 @@ export class ProtectCommand {
 
     this.printAdapterSummary(adapterDetection);
 
+    const history = new TransformationHistory(workspaceResult.workspaceProject);
+    await history.initialize();
+
     if (adapterDetection.adapter) {
       const generatorContext = new GeneratorContext({
         projectPath: this.projectPath,
@@ -144,12 +152,6 @@ export class ProtectCommand {
         semanticResult,
         adapter: adapterDetection.adapter,
       });
-
-      this.output.writeln('Generando Runtime...');
-      this.output.writeln();
-      await this.runtimeGenerator.generate(generatorContext);
-      this.output.writeln('✔ Runtime');
-      this.output.writeln();
 
       this.output.writeln('Generando SDK...');
       this.output.writeln();
@@ -183,7 +185,40 @@ export class ProtectCommand {
         for (const fileName of functionResult.functionFileNames) {
           this.output.writeln(`✔ ${fileName}`);
           this.output.writeln();
+
+          if (functionResult.files.length > 0) {
+            const generatedFile = functionResult.files.find((file) => file.fileName === fileName);
+
+            if (generatedFile) {
+              await history.record({
+                file: generatedFile.absolutePath,
+                operation: 'GENERATE_FUNCTION',
+                rewriteRule: 'FunctionGenerator',
+                before: '',
+                after: generatedFile.content,
+                generatedFiles: [generatedFile.relativePath],
+                modifiedImports: [],
+                status: 'COMPLETED',
+              });
+            }
+          }
         }
+      }
+
+      this.output.writeln('Generando Runtime...');
+      this.output.writeln();
+
+      const runtimeResult = await this.backendRuntimeGenerator.generate(
+        new RuntimeContext({
+          projectPath: this.projectPath,
+          workspacePath: workspaceResult.workspaceProject,
+          history,
+        }),
+      );
+
+      for (const generatedFile of runtimeResult.generatedFiles) {
+        this.output.writeln(`✔ ${generatedFile.fileName}`);
+        this.output.writeln();
       }
     }
 
@@ -195,10 +230,37 @@ export class ProtectCommand {
         projectPath: this.projectPath,
         workspacePath: workspaceResult.workspaceProject,
         semanticResult,
+        history,
       }),
     );
 
     this.printRewriteSummary(rewriteResult);
+
+    this.output.writeln('Registrando transformaciones...');
+    this.output.writeln();
+    this.output.writeln(`✔ ${history.getRecordCount()} transformaciones registradas`);
+    this.output.writeln();
+
+    this.output.writeln('Generando reporte...');
+    this.output.writeln();
+
+    const pipelineFinishedAt = new Date();
+    const reportResult = await this.changeReportGenerator.generate(
+      workspaceResult.workspaceProject,
+      history,
+      semanticResult,
+      pipelineFinishedAt.getTime() - pipelineStartedAt.getTime(),
+      pipelineFinishedAt,
+    );
+
+    this.output.writeln('✔ changes.md');
+    this.output.writeln();
+    this.output.writeln('✔ changes.html');
+    this.output.writeln();
+    this.output.writeln('✔ summary.json');
+    this.output.writeln();
+
+    void reportResult;
 
     return plannerResult;
   }

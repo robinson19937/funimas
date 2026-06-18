@@ -287,7 +287,7 @@ describe('ProtectCommand integration', () => {
     await command.execute();
 
     const workspacePath = `${projectDir}_funimas`;
-    const runtime = await readFile(join(workspacePath, 'runtime/index.ts'), 'utf8');
+    const runtime = await readFile(join(workspacePath, 'runtime/handler.ts'), 'utf8');
     const sdk = await readFile(join(workspacePath, 'sdk/index.ts'), 'utf8');
     const databaseClient = await readFile(
       join(workspacePath, 'sdk/database/DatabaseClient.ts'),
@@ -302,11 +302,11 @@ describe('ProtectCommand integration', () => {
       'utf8',
     );
 
-    expect(runtime).toContain('funimas-runtime');
+    expect(runtime).toContain('createHandler');
     expect(sdk).toContain('DatabaseClient');
     expect(databaseClient).toContain('class DatabaseClient');
     expect(netlifyFunction).toContain('Funimas Runtime');
     expect(untouchedService).toBe(originalService);
-    await expect(stat(join(projectDir, 'runtime/index.ts'))).rejects.toThrow();
+    await expect(stat(join(projectDir, 'runtime/handler.ts'))).rejects.toThrow();
   });
 });

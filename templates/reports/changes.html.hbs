@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Funimas Change Report</title>
+    <style>
+      body { font-family: monospace; margin: 2rem; }
+      .record { margin-bottom: 2rem; border-bottom: 1px solid #ccc; padding-bottom: 1rem; }
+      .removed { color: #c00; }
+      .added { color: #080; }
+    </style>
+  </head>
+  <body>
+    <h1>Funimas Change Report</h1>
+    {{#each records}}
+    <section class="record">
+      <h2>{{relativeFile}}</h2>
+      <p><strong>Regla:</strong> {{rewriteRule}}</p>
+      <p><strong>Operación:</strong> {{operation}}</p>
+      <pre class="removed">- {{{before}}}</pre>
+      <pre class="added">+ {{{after}}}</pre>
+    </section>
+    {{/each}}
+  </body>
+</html>

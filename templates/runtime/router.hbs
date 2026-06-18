@@ -1,0 +1,9 @@
+import { createDatabaseController } from './controllers/databaseController.js';
+
+export function createRouter() {
+  const databaseController = createDatabaseController();
+
+  return {
+    database: databaseController,
+  };
+}

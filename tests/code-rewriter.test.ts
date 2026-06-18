@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -152,6 +152,28 @@ describe('ProtectCommand + CodeRewriter integration', () => {
       expect(workspaceApp).toContain('Funimas.database.insert');
       expect(workspaceApp).not.toContain('addDoc(');
       expect(untouchedApp).toBe(originalApp);
+
+      const historyDir = join(workspacePath, '.funimas/history');
+      const historyFiles = (await readdir(historyDir)).filter((file) => file.endsWith('.json'));
+      const historyContents = await Promise.all(
+        historyFiles.map((file) => readFile(join(historyDir, file), 'utf8')),
+      );
+      const changesMarkdown = await readFile(
+        join(workspacePath, '.funimas/reports/changes.md'),
+        'utf8',
+      );
+      const summaryJson = JSON.parse(
+        await readFile(join(workspacePath, '.funimas/reports/summary.json'), 'utf8'),
+      ) as Record<string, unknown>;
+
+      expect(historyContents.some((content) => content.includes('DatabaseInsertRewriteRule'))).toBe(
+        true,
+      );
+      expect(historyFiles.length).toBeGreaterThanOrEqual(7);
+      expect(changesMarkdown).toContain('Funimas.database.insert');
+      expect(summaryJson.generatedFiles).toEqual(
+        expect.arrayContaining(['runtime/handler.ts', 'netlify/functions/database_insert.ts']),
+      );
 
       await expect(
         execFileAsync('npx', ['tsc', '-p', workspacePath], {
