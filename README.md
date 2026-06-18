@@ -45,6 +45,7 @@ Inicializa la protección de un proyecto siguiendo este flujo:
 4. **Project Scanner** para construir el índice interno del proyecto
 5. **Dependency Graph** para mapear relaciones entre archivos
 6. **Semantic Analyzer** para detectar operaciones semánticas mediante reglas extensibles
+7. **Transformation Planner** para generar el plan de ejecución sin modificar archivos
 
 ```
 Funimas
@@ -99,9 +100,25 @@ Register: 1
 
 ✔ Storage
 Upload: 3
+
+Planificando transformación...
+
+✔ Acciones: 18
+
+✔ Runtime: 1
+
+✔ SDK: 1
+
+✔ Functions: 6
+
+✔ Rewrites: 12
+
+✔ Imports: 12
+
+✔ Validaciones: 1
 ```
 
-Tanto el backup como el workspace excluyen automáticamente: `node_modules`, `.git`, `.funimas`, `dist` y `coverage`. El análisis semántico utiliza un motor de reglas extensible sin modificar archivos del proyecto.
+El planner decide qué acciones ejecutar (runtime, SDK, functions, rewrites, etc.) sin modificar ningún archivo. Está preparado para un futuro **Executor** que ejecutará el plan.
 
 ## Estructura del proyecto
 
@@ -112,7 +129,8 @@ src/
   parser/      Carga y modelo AST del proyecto (AstParser / ts-morph)
   scanner/     Índice interno del proyecto (ProjectScanner)
   graph/       Grafo de dependencias del proyecto (DependencyGraph)
-  analyzer/    Análisis semántico (futuro)
+  semantic/    Análisis semántico basado en reglas (SemanticAnalyzer)
+  analyzer/    Análisis de alto nivel (futuro)
   planner/     Planificación (futuro)
   generator/   Generación de código (futuro)
   backup/      Motor de copias de seguridad (BackupEngine)

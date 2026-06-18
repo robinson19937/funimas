@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 import { BackupEngine, type BackupService } from '../../backup/index.js';
 import { GraphBuilder, type GraphBuilderService } from '../../graph/index.js';
 import type { GraphResult } from '../../graph/GraphResult.js';
+import { TransformationPlanner, type TransformationPlannerService } from '../../planner/index.js';
+import type { PlannerResult } from '../../planner/PlannerResult.js';
 import { AstParser, type AstParserService } from '../../parser/index.js';
 import { ProjectScanner, type ProjectScannerService } from '../../scanner/index.js';
 import type { ScanResult } from '../../scanner/ScanResult.js';
@@ -22,6 +24,7 @@ export interface ProtectCommandOptions {
   projectScanner?: ProjectScannerService;
   graphBuilder?: GraphBuilderService;
   semanticAnalyzer?: SemanticAnalyzerService;
+  transformationPlanner?: TransformationPlannerService;
 }
 
 export class ProtectCommand {
@@ -33,6 +36,7 @@ export class ProtectCommand {
   private readonly projectScanner: ProjectScannerService;
   private readonly graphBuilder: GraphBuilderService;
   private readonly semanticAnalyzer: SemanticAnalyzerService;
+  private readonly transformationPlanner: TransformationPlannerService;
 
   constructor(options: ProtectCommandOptions) {
     this.projectPath = resolve(options.projectPath);
@@ -44,9 +48,10 @@ export class ProtectCommand {
     this.projectScanner = options.projectScanner ?? new ProjectScanner();
     this.graphBuilder = options.graphBuilder ?? new GraphBuilder();
     this.semanticAnalyzer = options.semanticAnalyzer ?? new SemanticAnalyzer();
+    this.transformationPlanner = options.transformationPlanner ?? new TransformationPlanner();
   }
 
-  async execute(): Promise<SemanticResult> {
+  async execute(): Promise<PlannerResult> {
     await this.backupEngine.create(this.projectPath);
     const workspaceResult = await this.workspaceEngine.create(this.projectPath);
 
@@ -75,7 +80,14 @@ export class ProtectCommand {
 
     this.printSemanticSummary(semanticResult);
 
-    return semanticResult;
+    this.output.writeln('Planificando transformación...');
+    this.output.writeln();
+
+    const plannerResult = this.transformationPlanner.plan(semanticResult);
+
+    this.printPlannerSummary(plannerResult);
+
+    return plannerResult;
   }
 
   private printWorkspaceSummary(workspaceResult: WorkspaceResult): void {
@@ -175,5 +187,21 @@ export class ProtectCommand {
     return semanticResult.operations.filter(
       (operation) => operation.metadata.category === category && operation.type === type,
     ).length;
+  }
+
+  private printPlannerSummary(plannerResult: PlannerResult): void {
+    this.output.writeln(`✔ Acciones: ${plannerResult.totalActions}`);
+    this.output.writeln();
+    this.output.writeln(`✔ Runtime: ${plannerResult.actionsByType.GENERATE_RUNTIME}`);
+    this.output.writeln();
+    this.output.writeln(`✔ SDK: ${plannerResult.actionsByType.GENERATE_SDK}`);
+    this.output.writeln();
+    this.output.writeln(`✔ Functions: ${plannerResult.actionsByType.GENERATE_FUNCTION}`);
+    this.output.writeln();
+    this.output.writeln(`✔ Rewrites: ${plannerResult.actionsByType.REWRITE_CODE}`);
+    this.output.writeln();
+    this.output.writeln(`✔ Imports: ${plannerResult.actionsByType.UPDATE_IMPORTS}`);
+    this.output.writeln();
+    this.output.writeln(`✔ Validaciones: ${plannerResult.actionsByType.VALIDATE_PROJECT}`);
   }
 }

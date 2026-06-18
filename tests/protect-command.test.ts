@@ -14,6 +14,10 @@ import type { ProjectScannerService } from '../src/scanner/ProjectScanner.js';
 import { SemanticOperation } from '../src/semantic/SemanticOperation.js';
 import { SemanticResult } from '../src/semantic/SemanticResult.js';
 import type { SemanticAnalyzerService } from '../src/semantic/SemanticAnalyzer.js';
+import { TransformationPlan } from '../src/planner/TransformationPlan.js';
+import { PlannerResult } from '../src/planner/PlannerResult.js';
+import { createEmptyActionsByType } from '../src/planner/PlannerResult.js';
+import type { TransformationPlannerService } from '../src/planner/TransformationPlanner.js';
 import { WorkspaceResult } from '../src/workspace/WorkspaceResult.js';
 import type { WorkspaceService } from '../src/workspace/WorkspaceEngine.js';
 import type { OutputWriter } from '../src/utils/output.js';
@@ -178,6 +182,27 @@ describe('ProtectCommand', () => {
     const semanticAnalyzer: SemanticAnalyzerService = {
       analyze: vi.fn().mockResolvedValue(semanticResult),
     };
+    const plannerResult = new PlannerResult({
+      plan: new TransformationPlan(),
+      totalActions: 18,
+      actionsByType: {
+        ...createEmptyActionsByType(),
+        GENERATE_RUNTIME: 1,
+        GENERATE_SDK: 1,
+        GENERATE_FUNCTION: 6,
+        REWRITE_CODE: 12,
+        UPDATE_IMPORTS: 12,
+        VALIDATE_PROJECT: 1,
+      },
+      estimatedModifiedFiles: 4,
+      estimatedGeneratedFiles: 8,
+      estimatedExecutionTime: 12000,
+      startedAt: new Date('2026-06-18T14:35:32.000Z'),
+      finishedAt: new Date('2026-06-18T14:35:33.000Z'),
+    });
+    const transformationPlanner: TransformationPlannerService = {
+      plan: vi.fn().mockReturnValue(plannerResult),
+    };
 
     const command = new ProtectCommand({
       projectPath: './mi-proyecto',
@@ -188,13 +213,15 @@ describe('ProtectCommand', () => {
       projectScanner,
       graphBuilder,
       semanticAnalyzer,
+      transformationPlanner,
     });
 
     const result = await command.execute();
 
     expect(semanticAnalyzer.analyze).toHaveBeenCalledOnce();
-    expect(semanticAnalyzer.analyze).toHaveBeenCalledWith(graphResult);
-    expect(result).toBe(semanticResult);
+    expect(transformationPlanner.plan).toHaveBeenCalledOnce();
+    expect(transformationPlanner.plan).toHaveBeenCalledWith(semanticResult);
+    expect(result).toBe(plannerResult);
 
     expect(output.lines).toContain('Análisis semántico');
     expect(output.lines).toContain('✔ Firebase detectado');
@@ -208,5 +235,13 @@ describe('ProtectCommand', () => {
     expect(output.lines).toContain('Register: 1');
     expect(output.lines).toContain('✔ Storage');
     expect(output.lines).toContain('Upload: 1');
+    expect(output.lines).toContain('Planificando transformación...');
+    expect(output.lines).toContain('✔ Acciones: 18');
+    expect(output.lines).toContain('✔ Runtime: 1');
+    expect(output.lines).toContain('✔ SDK: 1');
+    expect(output.lines).toContain('✔ Functions: 6');
+    expect(output.lines).toContain('✔ Rewrites: 12');
+    expect(output.lines).toContain('✔ Imports: 12');
+    expect(output.lines).toContain('✔ Validaciones: 1');
   });
 });
