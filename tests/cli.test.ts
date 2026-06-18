@@ -10,7 +10,12 @@ describe('CliApp', () => {
   const tempDirs: string[] = [];
 
   afterEach(async () => {
-    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+    await Promise.all(
+      tempDirs.splice(0).map(async (dir) => {
+        await rm(dir, { recursive: true, force: true });
+        await rm(`${dir}_funimas`, { recursive: true, force: true });
+      }),
+    );
   });
 
   it('ejecuta el comando protect con una ruta de proyecto', async () => {
