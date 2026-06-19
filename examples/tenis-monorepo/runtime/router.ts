@@ -18,6 +18,61 @@ export interface HttpResponse {
 
 const clubsController = createClubsController();
 const firestoreRepository = new FirestoreRepository();
+const DEFAULT_ALLOWED_COLLECTIONS = new Set(['clubs', 'cotizaciones', 'notas']);
+
+export class CollectionNotAllowedError extends Error {
+  readonly status = 403;
+
+  constructor(collection: string) {
+    super(`La colección "${collection}" no está permitida.`);
+    this.name = 'CollectionNotAllowedError';
+  }
+}
+
+function getAllowedCollections(): Set<string> {
+  const envOverride = process.env.FUNIMAS_ALLOWED_COLLECTIONS;
+
+  if (envOverride) {
+    return new Set(
+      envOverride
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    );
+  }
+
+  return DEFAULT_ALLOWED_COLLECTIONS;
+}
+
+function assertCollectionAllowed(collection: string): void {
+  const allowed = getAllowedCollections();
+
+  if (!allowed.has(collection)) {
+    throw new CollectionNotAllowedError(collection);
+  }
+}
+
+function assertPathAllowed(pathSegments: string[]): void {
+  const rootCollection = pathSegments[0];
+
+  if (!rootCollection) {
+    throw new CollectionNotAllowedError('unknown');
+  }
+
+  assertCollectionAllowed(String(rootCollection));
+}
+
+function parsePathBody(body: { collection?: string; id?: string; path?: string[] }): string[] | null {
+  if (Array.isArray(body.path) && body.path.length >= 2) {
+    return body.path.map(String);
+  }
+
+  if (body.collection && body.id) {
+    return [body.collection, String(body.id)];
+  }
+
+  return null;
+}
 
 function parseClubIdFromPath(path: string, suffix: string): string | null {
   const pattern = new RegExp(`^/api/clubs/([^/]+)${suffix}$`);
@@ -27,6 +82,24 @@ function parseClubIdFromPath(path: string, suffix: string): string | null {
 
 function jsonResponse(status: number, body: ApiResponse): HttpResponse {
   return { status, body };
+}
+
+async function handleGenericCrud(
+  request: HttpRequest,
+  handler: (authResult: AuthenticatedRequest) => Promise<HttpResponse>,
+): Promise<HttpResponse> {
+  const authResult = await authenticateRequest({
+    path: request.path,
+    method: request.method,
+    body: request.body,
+    headers: request.headers,
+  });
+
+  if ('error' in authResult) {
+    return jsonResponse(authResult.status, { success: false, message: authResult.error });
+  }
+
+  return handler(authResult);
 }
 
 export async function routeHttpRequest(request: HttpRequest): Promise<HttpResponse> {
@@ -111,33 +184,139 @@ export async function routeHttpRequest(request: HttpRequest): Promise<HttpRespon
     }
 
     if (method === 'POST' && path === '/api/insert') {
-      const authResult = await authenticateRequest({
-        path,
-        method,
-        body: request.body,
-        headers,
+      return handleGenericCrud(request, async () => {
+        const body = request.body as { collection?: string; data?: Record<string, unknown> };
+        if (!body?.collection || !body?.data) {
+          return jsonResponse(400, {
+            success: false,
+            message: 'collection y data son obligatorios.',
+          });
+        }
+
+        assertCollectionAllowed(body.collection);
+        const saved = await firestoreRepository.insert(body.collection, body.data);
+        return jsonResponse(201, { success: true, data: saved });
       });
+    }
 
-      if ('error' in authResult) {
-        return jsonResponse(authResult.status, { success: false, message: authResult.error });
-      }
+    if (method === 'POST' && path === '/api/read') {
+      return handleGenericCrud(request, async () => {
+        const body = request.body as { collection?: string; id?: string; path?: string[] };
+        const pathSegments = parsePathBody(body);
 
-      const body = request.body as { collection?: string; data?: Record<string, unknown> };
-      if (!body?.collection || !body?.data) {
-        return jsonResponse(400, {
-          success: false,
-          message: 'collection y data son obligatorios.',
-        });
-      }
+        if (!pathSegments) {
+          return jsonResponse(400, {
+            success: false,
+            message: 'collection e id, o path, son obligatorios.',
+          });
+        }
 
-      const saved = await firestoreRepository.insert(body.collection, body.data);
-      return jsonResponse(201, { success: true, data: saved });
+        assertPathAllowed(pathSegments);
+        const document = await firestoreRepository.getDocumentByPath(pathSegments);
+
+        if (!document) {
+          return jsonResponse(404, { success: false, message: 'Documento no encontrado.' });
+        }
+
+        return jsonResponse(200, { success: true, data: document });
+      });
+    }
+
+    if (method === 'POST' && path === '/api/list') {
+      return handleGenericCrud(request, async () => {
+        const body = request.body as {
+          collection?: string;
+          filters?: Array<{ field: string; operator: string; value: unknown }>;
+        };
+
+        if (!body?.collection) {
+          return jsonResponse(400, {
+            success: false,
+            message: 'collection es obligatorio.',
+          });
+        }
+
+        assertCollectionAllowed(body.collection);
+
+        const documents =
+          Array.isArray(body.filters) && body.filters.length > 0
+            ? await firestoreRepository.listDocumentsWhere(body.collection, body.filters)
+            : await firestoreRepository.listDocuments(body.collection);
+
+        return jsonResponse(200, { success: true, data: documents });
+      });
+    }
+
+    if (method === 'POST' && path === '/api/set') {
+      return handleGenericCrud(request, async () => {
+        const body = request.body as {
+          collection?: string;
+          id?: string;
+          path?: string[];
+          data?: Record<string, unknown>;
+        };
+
+        const pathSegments = parsePathBody(body);
+
+        if (!pathSegments || !body?.data) {
+          return jsonResponse(400, {
+            success: false,
+            message: 'collection/id o path, y data, son obligatorios.',
+          });
+        }
+
+        assertPathAllowed(pathSegments);
+        await firestoreRepository.setDocumentByPath(pathSegments, body.data);
+        return jsonResponse(200, { success: true, data: { id: pathSegments.at(-1) } });
+      });
+    }
+
+    if (method === 'POST' && path === '/api/update') {
+      return handleGenericCrud(request, async () => {
+        const body = request.body as {
+          collection?: string;
+          id?: string;
+          path?: string[];
+          data?: Record<string, unknown>;
+        };
+
+        const pathSegments = parsePathBody(body);
+
+        if (!pathSegments || !body?.data) {
+          return jsonResponse(400, {
+            success: false,
+            message: 'collection/id o path, y data, son obligatorios.',
+          });
+        }
+
+        assertPathAllowed(pathSegments);
+        await firestoreRepository.updateDocumentByPath(pathSegments, body.data);
+        return jsonResponse(200, { success: true, data: { id: pathSegments.at(-1) } });
+      });
+    }
+
+    if (method === 'POST' && path === '/api/delete') {
+      return handleGenericCrud(request, async () => {
+        const body = request.body as { collection?: string; id?: string; path?: string[] };
+        const pathSegments = parsePathBody(body);
+
+        if (!pathSegments) {
+          return jsonResponse(400, {
+            success: false,
+            message: 'collection e id, o path, son obligatorios.',
+          });
+        }
+
+        assertPathAllowed(pathSegments);
+        await firestoreRepository.deleteDocumentByPath(pathSegments);
+        return jsonResponse(200, { success: true, data: { id: pathSegments.at(-1) } });
+      });
     }
 
     return jsonResponse(404, { success: false, message: 'Ruta no encontrada.' });
   } catch (error) {
-    if (error instanceof AuthorizationError) {
-      return jsonResponse(403, { success: false, message: error.message });
+    if (error instanceof AuthorizationError || error instanceof CollectionNotAllowedError) {
+      return jsonResponse(error.status, { success: false, message: error.message });
     }
 
     const message = error instanceof Error ? error.message : 'Error interno del servidor.';

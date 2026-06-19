@@ -6,7 +6,13 @@ const runtime = createHandler();
 
 function normalizePath(event: import('@netlify/functions').HandlerEvent): string {
   const rawPath = event.rawUrl ? new URL(event.rawUrl).pathname : event.path;
-  return rawPath.replace(/^\/\.netlify\/functions\/funimas/, '') || '/';
+  const strippedPath = rawPath.replace(/^\/\.netlify\/functions\/funimas/, '') || '/';
+
+  if (strippedPath === '/' || strippedPath === '/api' || strippedPath.startsWith('/api/')) {
+    return strippedPath;
+  }
+
+  return `/api${strippedPath.startsWith('/') ? strippedPath : `/${strippedPath}`}`;
 }
 
 function collectHeaders(event: import('@netlify/functions').HandlerEvent): Record<string, string> {

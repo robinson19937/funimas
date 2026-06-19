@@ -41,6 +41,7 @@ describe('ProtectPipeline platform regression', () => {
 
     await expect(stat(join(workspacePath, 'runtime/handler.ts'))).resolves.toBeDefined();
     await expect(stat(join(workspacePath, 'sdk/index.ts'))).resolves.toBeDefined();
+    await expect(stat(join(workspacePath, 'sdk/index.js'))).resolves.toBeDefined();
     await expect(stat(join(workspacePath, 'tsconfig.json'))).resolves.toBeDefined();
   });
 

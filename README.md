@@ -486,7 +486,7 @@ funimas deploy . --import-env --prod
 
 ## Proyectos PWA / JavaScript plano
 
-En apps **sin bundler** (imports ES modules directos en el navegador), Funimas reescribe el código pero el navegador **no resuelve** `@funimas/sdk` solo. Necesitas dos pasos adicionales:
+En apps **sin bundler** (imports ES modules directos en el navegador), Funimas genera `sdk/index.js` y reescribe los módulos JavaScript hacia ese archivo con rutas relativas. Si tienes imports manuales a `@funimas/sdk`, usa un import map apuntando al módulo JavaScript generado:
 
 ### 1. Import map en tu HTML principal
 
@@ -494,20 +494,18 @@ En apps **sin bundler** (imports ES modules directos en el navegador), Funimas r
 <script type="importmap">
 {
   "imports": {
-    "@funimas/sdk": "/sdk/index.ts"
+    "@funimas/sdk": "/sdk/index.js"
   }
 }
 </script>
 ```
-
-> En producción puedes apuntar a archivos `.js` compilados si añades un paso de build del SDK.
 
 ### 2. Conectar Firebase Auth al SDK
 
 El SDK requiere el token del usuario autenticado. Crea un bootstrap (por ejemplo en `js/funimas.js`):
 
 ```javascript
-import { configureFunimas } from '@funimas/sdk';
+import { configureFunimas } from '/sdk/index.js';
 import { auth } from './firebase.js';
 
 export const Funimas = configureFunimas({

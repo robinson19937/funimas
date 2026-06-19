@@ -1,50 +1,4 @@
-export function renderSdkIndex(): string {
-  return `import { DatabaseClient } from './database/DatabaseClient.js';
-
-export type {
-  DatabaseClientOptions,
-  DocumentReferenceLike,
-  DocumentSnapshotLike,
-  GetIdToken,
-  QueryDocumentSnapshotLike,
-  QuerySnapshotLike,
-} from './database/DatabaseClient.js';
-export { DatabaseClient, ApiError } from './database/DatabaseClient.js';
-
-export type AuthHelpers = {
-  getIdToken: () => Promise<string | null>;
-};
-
-export type FunimasClient = ReturnType<typeof createFunimas>;
-
-export function createFunimas(auth: AuthHelpers, baseUrl = '/api') {
-  const database = new DatabaseClient({
-    baseUrl,
-    getIdToken: auth.getIdToken,
-  });
-
-  return {
-    database,
-    auth,
-  };
-}
-
-const defaultAuth: AuthHelpers = {
-  getIdToken: async () => null,
-};
-
-export const Funimas: FunimasClient = createFunimas(defaultAuth);
-
-export function configureFunimas(auth: AuthHelpers, baseUrl?: string) {
-  const configured = createFunimas(auth, baseUrl ?? '/api');
-  Object.assign(Funimas, configured);
-  return Funimas;
-}
-`;
-}
-
-export function renderSdkBrowserIndex(): string {
-  return `const FIRESTORE_SENTINEL_KEY = '__funimasFirestoreSentinel';
+const FIRESTORE_SENTINEL_KEY = '__funimasFirestoreSentinel';
 
 export class ApiError extends Error {
   constructor(message, status, code) {
@@ -136,7 +90,7 @@ function createQuerySnapshot(documents) {
 
 export class DatabaseClient {
   constructor(options) {
-    this.baseUrl = (options.baseUrl ?? '/api').replace(/\\/$/, '');
+    this.baseUrl = (options.baseUrl ?? '/api').replace(/\/$/, '');
     this.getIdToken = options.getIdToken;
     this.fetchFn = options.fetchFn ?? fetch.bind(globalThis);
   }
@@ -339,6 +293,4 @@ export function configureFunimas(auth, baseUrl = '/api') {
   const configured = createFunimas(auth, baseUrl);
   Object.assign(Funimas, configured);
   return Funimas;
-}
-`;
 }

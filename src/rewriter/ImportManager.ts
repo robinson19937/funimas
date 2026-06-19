@@ -1,4 +1,4 @@
-import { basename } from 'node:path';
+import { basename, dirname, extname, join, relative } from 'node:path';
 
 import type { SourceFile } from 'ts-morph';
 import { SyntaxKind } from 'ts-morph';
@@ -10,12 +10,19 @@ const FUNIMAS_IMPORT_NAME = 'Funimas';
  * Gestiona imports del SDK Funimas y elimina símbolos de Firebase no utilizados.
  */
 export class ImportManager {
-  ensureFunimasImport(sourceFile: SourceFile): boolean {
+  ensureFunimasImport(sourceFile: SourceFile, workspacePath?: string): boolean {
+    const moduleSpecifier = this.getFunimasModuleSpecifier(sourceFile, workspacePath);
     const existingDeclaration = sourceFile
       .getImportDeclarations()
-      .find((declaration) => declaration.getModuleSpecifierValue() === FUNIMAS_SDK_MODULE);
+      .find((declaration) =>
+        [moduleSpecifier, FUNIMAS_SDK_MODULE].includes(declaration.getModuleSpecifierValue()),
+      );
 
     if (existingDeclaration) {
+      if (existingDeclaration.getModuleSpecifierValue() !== moduleSpecifier) {
+        existingDeclaration.setModuleSpecifier(moduleSpecifier);
+      }
+
       const hasFunimas = existingDeclaration
         .getNamedImports()
         .some((namedImport) => namedImport.getName() === FUNIMAS_IMPORT_NAME);
@@ -30,7 +37,7 @@ export class ImportManager {
 
     sourceFile.addImportDeclaration({
       namedImports: [FUNIMAS_IMPORT_NAME],
-      moduleSpecifier: FUNIMAS_SDK_MODULE,
+      moduleSpecifier,
     });
 
     return true;
@@ -73,5 +80,18 @@ export class ImportManager {
 
   getDisplayFileName(filePath: string): string {
     return basename(filePath);
+  }
+
+  private getFunimasModuleSpecifier(sourceFile: SourceFile, workspacePath?: string): string {
+    const extension = extname(sourceFile.getFilePath()).toLowerCase();
+
+    if (!workspacePath || !['.js', '.mjs'].includes(extension)) {
+      return FUNIMAS_SDK_MODULE;
+    }
+
+    const relativePath = relative(dirname(sourceFile.getFilePath()), join(workspacePath, 'sdk/index.js'))
+      .replace(/\\/g, '/');
+
+    return relativePath.startsWith('.') ? relativePath : `./${relativePath}`;
   }
 }
