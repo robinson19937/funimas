@@ -103,7 +103,7 @@ export class FirestoreRepository {
 
   async insert(collection: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
     const ref = getDb().collection(collection).doc();
-    await ref.create(decodeWriteData(data));
+    await ref.set(decodeWriteData(data));
     return { id: ref.id };
   }
 
@@ -177,7 +177,7 @@ export class FirestoreRepository {
       throw new DocumentAlreadyExistsError(path);
     }
 
-    await ref.create(decodeWriteData(data));
+    await ref.set(decodeWriteData(data));
   }
 
   async upsertDocument(

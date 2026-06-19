@@ -13,10 +13,6 @@ service cloud.firestore {
       return value is string && value.size() > 0 && value.size() <= maxLength;
     }
 
-    function isOptionalString(value, maxLength) {
-      return value == null || (value is string && value.size() <= maxLength);
-    }
-
     function hasOnlyKeys(keys) {
       return request.resource.data.keys().hasOnly(keys);
     }
@@ -46,7 +42,8 @@ service cloud.firestore {
         hasOnlyKeys(['uid', 'email', 'displayName', 'companyId', 'createdAt', 'updatedAt']) &&
         request.resource.data.uid == uid &&
         isNonEmptyString(request.resource.data.email, 320) &&
-        isOptionalString(request.resource.data.displayName, 120) &&
+        (!('displayName' in request.resource.data) ||
+          isNonEmptyString(request.resource.data.displayName, 120)) &&
         isNonEmptyString(request.resource.data.companyId, 128);
     }
 
