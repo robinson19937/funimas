@@ -2,6 +2,7 @@ import { ProtectCommand } from './commands/protect-command.js';
 import { DeployCommand, resolveWorkspacePath } from './commands/deploy-command.js';
 import { SetupCommand } from './commands/setup-command.js';
 import { StatusCommand } from './commands/status-command.js';
+import { VerifyCommand } from './commands/verify-command.js';
 import { ProjectFsError, ProjectValidator } from '../pipeline/ProjectValidator.js';
 
 export interface CliOptions {
@@ -16,6 +17,8 @@ interface ParsedFlags {
   importEnv: boolean;
   check: boolean;
   force: boolean;
+  skipBuild: boolean;
+  skipDeployReadiness: boolean;
 }
 
 export class CliApp {
@@ -44,6 +47,8 @@ export class CliApp {
         return this.runDeploy(rest);
       case 'status':
         return this.runStatus(rest);
+      case 'verify':
+        return this.runVerify(rest);
       default:
         console.error(`Comando desconocido: ${command}`);
         this.printUsage();
@@ -68,9 +73,9 @@ export class CliApp {
         force,
       });
 
-      await command.executePipeline();
+      const result = await command.executePipeline();
 
-      return 0;
+      return result.success ? 0 : 1;
     } catch (error) {
       if (error instanceof ProjectFsError) {
         console.error(`Error: ${error.message}`);
@@ -100,6 +105,43 @@ export class CliApp {
     const projectPath = args.find((arg) => !arg.startsWith('-')) ?? process.cwd();
     const command = new StatusCommand({ projectPath });
     return command.execute();
+  }
+
+  private async runVerify(args: string[]): Promise<number> {
+    const { workspacePath, skipBuild, skipDeployReadiness } = this.parseVerifyArgs(args);
+    const command = new VerifyCommand({
+      workspacePath,
+      skipBuild,
+      skipDeployReadiness,
+    });
+
+    return command.execute();
+  }
+
+  private parseVerifyArgs(args: string[]): {
+    workspacePath: string;
+    skipBuild: boolean;
+    skipDeployReadiness: boolean;
+  } {
+    const positional: string[] = [];
+    let skipBuild = false;
+    let skipDeployReadiness = false;
+
+    for (const arg of args) {
+      if (arg === '--skip-build') {
+        skipBuild = true;
+      } else if (arg === '--skip-deploy-readiness') {
+        skipDeployReadiness = true;
+      } else if (!arg.startsWith('-')) {
+        positional.push(arg);
+      }
+    }
+
+    return {
+      workspacePath: resolveWorkspacePath(positional[0] ?? process.cwd()),
+      skipBuild,
+      skipDeployReadiness,
+    };
   }
 
   private async runSetup(): Promise<number> {
@@ -134,6 +176,8 @@ export class CliApp {
       importEnv: false,
       check: false,
       force: false,
+      skipBuild: false,
+      skipDeployReadiness: false,
     };
 
     for (const arg of args) {
@@ -175,10 +219,15 @@ export class CliApp {
     console.log('  setup                        Verifica prerequisitos (Node, Git, Firebase, Netlify)');
     console.log('  status [ruta]                Reporta APIs Firestore listas vs pendientes');
     console.log('  protect <ruta-del-proyecto>    Protege un proyecto y genera el workspace');
+    console.log('  verify [workspace] [opciones]  Verifica que el workspace sea funcional');
     console.log('  deploy [workspace] [opciones]  Despliega reglas Firebase y sitio Netlify');
     console.log();
     console.log('Opciones de protect:');
     console.log('  --force             Sobrescribe el workspace _funimas si ya existe');
+    console.log();
+    console.log('Opciones de verify:');
+    console.log('  --skip-build                 Omite npm install/build');
+    console.log('  --skip-deploy-readiness      Omite comprobación de .env y netlify.toml');
     console.log();
     console.log('Opciones de deploy:');
     console.log('  --prod              Despliegue a producción en Netlify');

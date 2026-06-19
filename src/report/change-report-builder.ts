@@ -2,6 +2,10 @@ import { basename, relative, resolve } from 'node:path';
 
 import type { TransformationRecord } from '../history/TransformationRecord.js';
 import type { SemanticResult } from '../semantic/SemanticResult.js';
+import {
+  analyzeUntransformedOperations,
+  type UntransformedOperationFinding,
+} from './untransformed-operations-analyzer.js';
 
 const GENERATED_OPERATIONS = new Set([
   'GENERATE_RUNTIME',
@@ -40,8 +44,11 @@ export interface ChangeReportViewModel {
     codeChanges: number;
     filesGenerated: number;
     operationsTransformed: number;
+    operationsUntransformed: number;
   };
   fileChanges: ReportFileChanges[];
+  untransformedOperations: UntransformedOperationFinding[];
+  workspaceReady: boolean;
   generatedArtifacts: {
     runtime: string[];
     sdk: string[];
@@ -176,6 +183,11 @@ export function buildChangeReportViewModel(options: {
   }, {});
 
   const operationsTransformedTotal = rewriteRecords.length;
+  const untransformedOperations = analyzeUntransformedOperations({
+    workspacePath,
+    semanticResult,
+    records,
+  });
   const filesGenerated =
     generatedArtifacts.runtime.length +
     generatedArtifacts.sdk.length +
@@ -193,10 +205,13 @@ export function buildChangeReportViewModel(options: {
       codeChanges: rewriteRecords.length,
       filesGenerated,
       operationsTransformed: operationsTransformedTotal,
+      operationsUntransformed: untransformedOperations.length,
     },
     fileChanges,
     generatedArtifacts,
     operationsFound: semanticResult.operationsByType,
     operationsTransformed,
+    untransformedOperations,
+    workspaceReady: untransformedOperations.every((finding) => !finding.blocking),
   };
 }

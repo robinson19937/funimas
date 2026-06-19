@@ -13,7 +13,17 @@
 | Reescrituras de código | {{stats.codeChanges}} |
 | Archivos generados | {{stats.filesGenerated}} |
 | Operaciones transformadas | {{stats.operationsTransformed}} |
+| Operaciones sin transformar | {{stats.operationsUntransformed}} |
+| Workspace listo | {{#if workspaceReady}}sí{{else}}no{{/if}} |
 
+{{#if untransformedOperations.length}}
+## Operaciones sin transformar
+
+{{#each untransformedOperations}}
+- `{{file}}:{{line}}`{{#if callee}} — `{{callee}}()`{{/if}} ({{reason}}): {{recommendation}}
+{{/each}}
+
+{{/if}}
 ---
 
 ## Cambios en tu código
