@@ -24,11 +24,16 @@ const auth = getAuth(app);
     );
 
     const result = new FirebaseAuthConfigurator().configure(project, workspacePath);
+    sourceFile.organizeImports();
+    sourceFile.formatText({ indentSize: 2 });
     const content = sourceFile.getFullText();
+    const authIndex = content.indexOf('const auth = getAuth(app);');
+    const configureIndex = content.indexOf('configureFunimas({');
 
     expect(result.modifiedFiles).toEqual([join(workspacePath, 'js/firebase.js')]);
     expect(content).toContain('import { configureFunimas } from "../sdk/index.js";');
     expect(content).toContain('getIdToken: async () => auth.currentUser?.getIdToken() ?? null');
+    expect(configureIndex).toBeGreaterThan(authIndex);
   });
 
   it('no duplica configureFunimas si el archivo ya está configurado', () => {

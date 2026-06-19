@@ -26,16 +26,9 @@ export class FirebaseAuthConfigurator {
 
       const importAdded = this.ensureConfigureFunimasImport(sourceFile, workspacePath);
       const statement = authBinding.statement;
-      const statements = sourceFile.getStatements();
-      const statementIndex = statements.findIndex((candidate) => candidate === statement);
-
-      if (statementIndex === -1) {
-        continue;
-      }
-
-      sourceFile.insertStatements(
-        statementIndex + 1,
-        `\nconfigureFunimas({
+      sourceFile.insertText(
+        statement.getEnd(),
+        `\n\nconfigureFunimas({
   getIdToken: async () => ${authBinding.authVariable}.currentUser?.getIdToken() ?? null,
 });`,
       );
