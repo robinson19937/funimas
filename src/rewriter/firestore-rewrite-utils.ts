@@ -116,6 +116,70 @@ export function extractCollectionArgument(callExpression: CallExpression): strin
   return nameArgument.getText();
 }
 
+export type SnapshotTarget =
+  | { kind: 'document'; collection: string; docId: string }
+  | { kind: 'collection'; collection: string };
+
+export function extractSnapshotTarget(
+  callExpression: CallExpression,
+): SnapshotTarget | undefined {
+  const referenceArgument = callExpression.getArguments()[0];
+  const referenceCall = referenceArgument ? resolveCallExpression(referenceArgument) : undefined;
+
+  if (!referenceCall) {
+    return undefined;
+  }
+
+  const callee = referenceCall.getExpression();
+
+  if (callee.getKind() !== SyntaxKind.Identifier) {
+    return undefined;
+  }
+
+  const calleeName = callee.getText();
+
+  if (calleeName === 'doc') {
+    const docReference = extractDocParts(referenceCall);
+
+    if (!docReference) {
+      return undefined;
+    }
+
+    return {
+      kind: 'document',
+      collection: docReference.collection,
+      docId: docReference.docId,
+    };
+  }
+
+  if (calleeName === 'collection') {
+    const nameArgument = referenceCall.getArguments()[1];
+
+    if (!nameArgument || nameArgument.getKind() !== SyntaxKind.StringLiteral) {
+      return undefined;
+    }
+
+    return {
+      kind: 'collection',
+      collection: nameArgument.asKindOrThrow(SyntaxKind.StringLiteral).getLiteralValue(),
+    };
+  }
+
+  return undefined;
+}
+
+export function extractSnapshotCallback(callExpression: CallExpression): string | undefined {
+  for (const argument of callExpression.getArguments().slice(1)) {
+    const kind = argument.getKind();
+
+    if (kind === SyntaxKind.ArrowFunction || kind === SyntaxKind.FunctionExpression) {
+      return argument.getText();
+    }
+  }
+
+  return undefined;
+}
+
 export function extractCollectionNameFromInsert(callExpression: CallExpression): string | undefined {
   const collectionArgument = callExpression.getArguments()[0];
   const collectionCall = collectionArgument ? resolveCallExpression(collectionArgument) : undefined;

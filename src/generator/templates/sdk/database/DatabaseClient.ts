@@ -150,6 +150,105 @@ export class DatabaseClient {
   async delete(collection: string, id: string): Promise<void> {
     await this.request('POST', '/delete', { collection, id });
   }
+
+  poll(
+    collection: string,
+    id: string,
+    onNext: (snapshot: {
+      exists: () => boolean;
+      data: () => Record<string, unknown> | undefined;
+      id: string;
+    }) => void,
+    intervalMs = 5000,
+  ): () => void {
+    let active = true;
+
+    const run = async () => {
+      while (active) {
+        try {
+          const data = await this.get(collection, id);
+          onNext({
+            exists: () => true,
+            data: () => data,
+            id: String(data.id ?? id),
+          });
+        } catch {
+          onNext({
+            exists: () => false,
+            data: () => undefined,
+            id,
+          });
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+    };
+
+    void run();
+
+    return () => {
+      active = false;
+    };
+  }
+
+  pollCollection(
+    collection: string,
+    onNext: (snapshot: {
+      docs: Array<{
+        exists: () => boolean;
+        data: () => Record<string, unknown>;
+        id: string;
+      }>;
+      empty: boolean;
+      forEach: (
+        callback: (doc: {
+          exists: () => boolean;
+          data: () => Record<string, unknown>;
+          id: string;
+        }) => void,
+      ) => void;
+    }) => void,
+    intervalMs = 5000,
+  ): () => void {
+    let active = true;
+
+    const run = async () => {
+      while (active) {
+        try {
+          const documents = await this.list(collection);
+          const docs = documents.map((document) => ({
+            exists: () => true,
+            data: () => document,
+            id: String(document.id ?? ''),
+          }));
+
+          onNext({
+            docs,
+            empty: docs.length === 0,
+            forEach: (callback) => {
+              for (const doc of docs) {
+                callback(doc);
+              }
+            },
+          });
+        } catch {
+          onNext({
+            docs: [],
+            empty: true,
+            forEach: () => undefined,
+          });
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+    };
+
+    void run();
+
+    return () => {
+      active = false;
+    };
+  }
 }
 `;
 }

@@ -10,6 +10,7 @@ const FIRESTORE_CALLS: Record<string, SemanticOperationType> = {
   deleteDoc: 'DATABASE_DELETE',
   getDoc: 'DATABASE_READ',
   getDocs: 'DATABASE_READ',
+  onSnapshot: 'DATABASE_READ',
 };
 
 export class FirestoreRule implements SemanticRule {
