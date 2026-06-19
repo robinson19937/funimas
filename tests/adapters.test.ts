@@ -1,7 +1,9 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, afterEach } from 'vitest';
 
 import {
   ADAPTER_FEATURE_LABELS,
@@ -160,6 +162,14 @@ describe('AdapterCapabilities', () => {
 });
 
 describe('NetlifyAdapter', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(
+      tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+    );
+  });
+
   it('detecta proyectos Netlify por netlify.toml', async () => {
     const adapter = new NetlifyAdapter();
     const context = new AdapterContext({
@@ -200,16 +210,46 @@ describe('NetlifyAdapter', () => {
     expect(detection.foundAt).toContain('netlify.toml');
   });
 
-  it('usa workspacePath como primera ruta de detección cuando está disponible', async () => {
+  it('genera .env.example con las variables requeridas', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'funimas-netlify-env-'));
+    tempDirs.push(workspacePath);
+    await writeFile(join(workspacePath, 'netlify.toml'), '[build]\n  functions = "netlify/functions"\n', 'utf8');
+
     const adapter = new NetlifyAdapter();
     const context = new AdapterContext({
-      projectPath: join(fixturesDir, 'plain-project'),
-      workspacePath: join(fixturesDir, 'netlify-project'),
+      projectPath: workspacePath,
+      workspacePath,
     });
 
-    const detection = await adapter.detect(context);
+    const environment = await adapter.generateEnvironment(context);
 
-    expect(detection.detected).toBe(true);
+    expect(environment.success).toBe(true);
+    expect(environment.data.variables).toContain('FIREBASE_PROJECT_ID');
+    expect(environment.data.variables).toContain('VITE_FUNIMAS_API_URL');
+
+    const envExample = await readFile(join(workspacePath, '.env.example'), 'utf8');
+    expect(envExample).toContain('VITE_FUNIMAS_API_URL=/api');
+  });
+
+  it('parchea netlify.toml con redirects y configuración de functions', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'funimas-netlify-config-'));
+    tempDirs.push(workspacePath);
+    await writeFile(join(workspacePath, 'netlify.toml'), '[build]\n  publish = "dist"\n', 'utf8');
+
+    const adapter = new NetlifyAdapter();
+    const context = new AdapterContext({
+      projectPath: workspacePath,
+      workspacePath,
+    });
+
+    const configuration = await adapter.generateConfiguration(context);
+
+    expect(configuration.success).toBe(true);
+    expect(configuration.data.files).toContain('netlify.toml');
+    expect(configuration.data.metadata.patched).toBe(true);
+
+    const netlifyToml = await readFile(join(workspacePath, 'netlify.toml'), 'utf8');
+    expect(netlifyToml).toContain('/api/*');
   });
 });
 

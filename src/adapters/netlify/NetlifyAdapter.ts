@@ -1,3 +1,4 @@
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { AdapterCapabilities } from '../AdapterCapabilities.js';
@@ -17,11 +18,13 @@ import {
 } from '../AdapterResult.js';
 import { operationTypeToFileName } from '../../utils/operation-naming.js';
 import { RuntimeTemplateEngine } from '../../runtime/RuntimeTemplateEngine.js';
+import { patchNetlifyToml } from '../../utils/netlify-config-patcher.js';
 import { BasePlatformAdapter } from '../PlatformAdapter.js';
 
 const NETLIFY_MARKER = 'netlify.toml';
 const NETLIFY_FUNCTIONS_DIR = 'netlify/functions';
 const DATABASE_INSERT_TEMPLATE = 'netlify/databaseInsert.hbs';
+const ENV_EXAMPLE_TEMPLATE = 'deploy/env.example.hbs';
 
 /**
  * Adaptador para proyectos desplegados en Netlify.
@@ -87,6 +90,55 @@ export class NetlifyAdapter extends BasePlatformAdapter {
         operationType: operation.type,
         platform: this.id,
         templateUsed: `templates/${DATABASE_INSERT_TEMPLATE}`,
+      },
+    });
+  }
+
+  async generateConfiguration(context: AdapterContext) {
+    const targetPath = context.getTargetPath();
+    const netlifyTomlPath = join(targetPath, NETLIFY_MARKER);
+    let existing = '';
+
+    try {
+      existing = await readFile(netlifyTomlPath, 'utf8');
+    } catch {
+      existing = '';
+    }
+
+    const patchResult = patchNetlifyToml(existing);
+
+    if (patchResult.patched || existing.length === 0) {
+      await writeFile(netlifyTomlPath, patchResult.content, 'utf8');
+    }
+
+    return createEmptyAdapterResult({
+      files: [NETLIFY_MARKER],
+      metadata: {
+        patched: patchResult.patched || existing.length === 0,
+        changes: patchResult.changes,
+      },
+    });
+  }
+
+  async generateEnvironment(context: AdapterContext) {
+    const targetPath = context.getTargetPath();
+    const envExamplePath = join(targetPath, '.env.example');
+    const content = await this.templateEngine.render(ENV_EXAMPLE_TEMPLATE, {});
+
+    await writeFile(envExamplePath, `${content.trimEnd()}\n`, 'utf8');
+
+    return createEmptyAdapterResult({
+      variables: [
+        'VITE_FIREBASE_API_KEY',
+        'VITE_FIREBASE_AUTH_DOMAIN',
+        'VITE_FIREBASE_PROJECT_ID',
+        'VITE_FUNIMAS_API_URL',
+        'FIREBASE_PROJECT_ID',
+        'FIREBASE_CLIENT_EMAIL',
+        'FIREBASE_PRIVATE_KEY',
+      ],
+      metadata: {
+        file: '.env.example',
       },
     });
   }

@@ -20,6 +20,7 @@ import {
   GenerationVerificationError,
   SDKGenerator,
   WorkspaceConfigGenerator,
+  DeployConfigGenerator,
   type FunctionGeneratorService,
   type SDKGeneratorService,
 } from '../generator/index.js';
@@ -76,6 +77,7 @@ export interface ProtectPipelineOptions {
   sharedGenerator?: SharedGeneratorService;
   generatedFileVerifier?: GeneratedFileVerifier;
   workspaceConfigGenerator?: WorkspaceConfigGenerator;
+  deployConfigGenerator?: DeployConfigGenerator;
 }
 
 export class ProtectPipeline {
@@ -102,6 +104,7 @@ export class ProtectPipeline {
   private readonly sharedGenerator: SharedGeneratorService;
   private readonly generatedFileVerifier: GeneratedFileVerifier;
   private readonly workspaceConfigGenerator: WorkspaceConfigGenerator;
+  private readonly deployConfigGenerator: DeployConfigGenerator;
   private readonly executionId: string;
 
   constructor(options: ProtectPipelineOptions) {
@@ -133,6 +136,8 @@ export class ProtectPipeline {
     this.generatedFileVerifier = options.generatedFileVerifier ?? new GeneratedFileVerifier();
     this.workspaceConfigGenerator =
       options.workspaceConfigGenerator ?? new WorkspaceConfigGenerator();
+    this.deployConfigGenerator =
+      options.deployConfigGenerator ?? new DeployConfigGenerator();
     this.executionId = randomUUID();
   }
 
@@ -415,11 +420,13 @@ export class ProtectPipeline {
     this.output.writeln();
 
     if (summary.validationResult.valid) {
-      this.output.writeln('Próximo paso para producción:');
+      this.output.writeln('Próximos pasos para producción:');
       this.output.writeln();
       this.output.writeln(`  cd ${summary.workspaceResult.workspaceProject}`);
+      this.output.writeln('  cp .env.example .env   # completa tus credenciales');
       this.output.writeln('  npm install');
-      this.output.writeln('  netlify deploy');
+      this.output.writeln('  npm run build');
+      this.output.writeln(`  funimas deploy ${summary.workspaceResult.workspaceProject} --import-env --prod`);
       this.output.writeln();
     }
   }
@@ -659,6 +666,30 @@ export class ProtectPipeline {
     this.output.writeln();
     this.output.writeln('✔ package.json');
     this.output.writeln();
+
+    const deployConfig = await this.deployConfigGenerator.generate(
+      generatorContext,
+      adapter,
+    );
+
+    for (const file of deployConfig.filesWritten) {
+      this.output.writeln(`✔ ${file}`);
+      this.output.writeln();
+    }
+
+    if (deployConfig.netlifyTomlChanges.length > 0) {
+      for (const change of deployConfig.netlifyTomlChanges) {
+        this.output.writeln(`  → ${change}`);
+        this.output.writeln();
+      }
+    }
+
+    if (deployConfig.firestoreCollections.length > 0) {
+      this.output.writeln(
+        `Colecciones en firestore.rules: ${deployConfig.firestoreCollections.join(', ')}`,
+      );
+      this.output.writeln();
+    }
 
     if (!functionSkipReason) {
       await this.generateFunctions({
