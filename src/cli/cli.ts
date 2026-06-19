@@ -1,6 +1,7 @@
 import { ProtectCommand } from './commands/protect-command.js';
 import { DeployCommand, resolveWorkspacePath } from './commands/deploy-command.js';
 import { SetupCommand } from './commands/setup-command.js';
+import { StatusCommand } from './commands/status-command.js';
 import { ProjectFsError, ProjectValidator } from '../pipeline/ProjectValidator.js';
 
 export interface CliOptions {
@@ -14,6 +15,7 @@ interface ParsedFlags {
   dryRun: boolean;
   importEnv: boolean;
   check: boolean;
+  force: boolean;
 }
 
 export class CliApp {
@@ -40,6 +42,8 @@ export class CliApp {
         return this.runSetup();
       case 'deploy':
         return this.runDeploy(rest);
+      case 'status':
+        return this.runStatus(rest);
       default:
         console.error(`Comando desconocido: ${command}`);
         this.printUsage();
@@ -48,18 +52,21 @@ export class CliApp {
   }
 
   private async runProtect(args: string[]): Promise<number> {
-    const projectPath = args[0];
+    const { projectPath, force } = this.parseProtectArgs(args);
 
     if (!projectPath) {
       console.error('Error: debes indicar la ruta del proyecto.');
-      console.error('Uso: funimas protect <ruta-del-proyecto>');
+      console.error('Uso: funimas protect <ruta-del-proyecto> [--force]');
       return 1;
     }
 
     try {
       const validator = new ProjectValidator();
       const validation = await validator.validate(projectPath);
-      const command = new ProtectCommand({ projectPath: validation.projectPath });
+      const command = new ProtectCommand({
+        projectPath: validation.projectPath,
+        force,
+      });
 
       await command.executePipeline();
 
@@ -72,6 +79,27 @@ export class CliApp {
 
       throw error;
     }
+  }
+
+  private parseProtectArgs(args: string[]): { projectPath?: string; force: boolean } {
+    const positional: string[] = [];
+    let force = false;
+
+    for (const arg of args) {
+      if (arg === '--force') {
+        force = true;
+      } else if (!arg.startsWith('-')) {
+        positional.push(arg);
+      }
+    }
+
+    return { projectPath: positional[0], force };
+  }
+
+  private async runStatus(args: string[]): Promise<number> {
+    const projectPath = args.find((arg) => !arg.startsWith('-')) ?? process.cwd();
+    const command = new StatusCommand({ projectPath });
+    return command.execute();
   }
 
   private async runSetup(): Promise<number> {
@@ -105,6 +133,7 @@ export class CliApp {
       dryRun: false,
       importEnv: false,
       check: false,
+      force: false,
     };
 
     for (const arg of args) {
@@ -144,8 +173,12 @@ export class CliApp {
     console.log();
     console.log('Comandos:');
     console.log('  setup                        Verifica prerequisitos (Node, Git, Firebase, Netlify)');
+    console.log('  status [ruta]                Reporta APIs Firestore listas vs pendientes');
     console.log('  protect <ruta-del-proyecto>    Protege un proyecto y genera el workspace');
     console.log('  deploy [workspace] [opciones]  Despliega reglas Firestore y sitio Netlify');
+    console.log();
+    console.log('Opciones de protect:');
+    console.log('  --force             Sobrescribe el workspace _funimas si ya existe');
     console.log();
     console.log('Opciones de deploy:');
     console.log('  --prod              Despliegue a producción en Netlify');

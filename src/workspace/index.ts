@@ -10,4 +10,6 @@ export {
   assertProjectDirectoryExists,
   assertWorkspaceDoesNotExist,
   getWorkspaceProjectPath,
+  removeWorkspaceIfExists,
 } from './WorkspaceUtils.js';
+export type { WorkspaceCreateOptions } from './WorkspaceEngine.js';
