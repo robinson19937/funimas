@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -70,5 +70,37 @@ describe('CliApp', () => {
     const exitCode = await app.run();
 
     expect(exitCode).toBe(1);
+  });
+
+  it('ejecuta el comando setup', async () => {
+    const app = new CliApp({
+      argv: ['node', 'funimas', 'setup'],
+    });
+
+    const exitCode = await app.run();
+
+    expect(exitCode).toBe(0);
+  });
+
+  it('ejecuta deploy en dry-run cuando el workspace existe', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'funimas-cli-deploy-'));
+    const workspace = `${workspacePath}_funimas`;
+    tempDirs.push(workspace);
+    await mkdir(workspace, { recursive: true });
+
+    await writeFile(
+      join(workspace, 'firebase.json'),
+      JSON.stringify({ firestore: { rules: 'firestore.rules' } }),
+      'utf8',
+    );
+    await writeFile(join(workspace, 'firestore.rules'), "allow read: if false;\n", 'utf8');
+
+    const app = new CliApp({
+      argv: ['node', 'funimas', 'deploy', workspace, '--dry-run'],
+    });
+
+    const exitCode = await app.run();
+
+    expect(exitCode).toBe(0);
   });
 });
