@@ -103,4 +103,29 @@ describe('CliApp', () => {
 
     expect(exitCode).toBe(0);
   });
+
+  it('ejecuta deploy en dry-run cuando el workspace no usa sufijo _funimas', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'funimas-cloned-workspace-'));
+    tempDirs.push(workspace);
+
+    await writeFile(
+      join(workspace, 'firebase.json'),
+      JSON.stringify({ firestore: { rules: 'firestore.rules' } }),
+      'utf8',
+    );
+    await writeFile(join(workspace, 'firestore.rules'), "allow read: if false;\n", 'utf8');
+    await writeFile(
+      join(workspace, 'funimas.config.json'),
+      JSON.stringify({ version: 1, allowedCollections: ['users'] }),
+      'utf8',
+    );
+
+    const app = new CliApp({
+      argv: ['node', 'funimas', 'deploy', workspace, '--dry-run'],
+    });
+
+    const exitCode = await app.run();
+
+    expect(exitCode).toBe(0);
+  });
 });
