@@ -55,6 +55,7 @@ import type { ProtectPipelineResult } from './ProtectPipelineResult.js';
 
 export interface ProtectPipelineOptions {
   projectPath: string;
+  force?: boolean;
   output?: OutputWriter;
   backupEngine?: BackupService;
   workspaceEngine?: WorkspaceService;
@@ -82,6 +83,7 @@ export interface ProtectPipelineOptions {
 
 export class ProtectPipeline {
   private readonly projectPath: string;
+  private readonly force: boolean;
   private readonly output: OutputWriter;
   private readonly backupEngine: BackupService;
   private readonly workspaceEngine: WorkspaceService;
@@ -109,6 +111,7 @@ export class ProtectPipeline {
 
   constructor(options: ProtectPipelineOptions) {
     this.projectPath = resolve(options.projectPath);
+    this.force = options.force ?? false;
     this.output = options.output ?? new ConsoleOutputWriter();
     this.backupEngine =
       options.backupEngine ?? new BackupEngine({ output: new NullOutputWriter() });
@@ -144,7 +147,9 @@ export class ProtectPipeline {
   async execute(): Promise<ProtectPipelineResult> {
     const pipelineStartedAt = new Date();
     await this.backupEngine.create(this.projectPath);
-    const workspaceResult = await this.workspaceEngine.create(this.projectPath);
+    const workspaceResult = await this.workspaceEngine.create(this.projectPath, {
+      force: this.force,
+    });
 
     this.printWorkspaceSummary(workspaceResult);
 

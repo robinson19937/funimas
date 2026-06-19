@@ -51,6 +51,6 @@ export async function createUser() {
 
     expect(result.collections).toContain('users');
     expect(rules).toContain('match /users/{documentId}');
-    expect(rules).toContain('allow create, update, delete: if false');
+    expect(rules).toContain('allow read, create, update, delete: if false');
   });
 });

@@ -74,6 +74,25 @@ describe('WorkspaceEngine', () => {
     await expect(readFile(join(workspaceDir, '.funimas', 'config.json'), 'utf8')).rejects.toThrow();
   });
 
+  it('sobrescribe el workspace existente cuando force=true', async () => {
+    const projectDir = await createTempProject({
+      'package.json': '{"name":"crm"}',
+      'src/app.ts': 'export const app = true;',
+    });
+    const workspaceDir = `${projectDir}_funimas`;
+    await mkdir(workspaceDir, { recursive: true });
+    await writeFile(join(workspaceDir, 'old.txt'), 'stale', 'utf8');
+
+    const engine = new WorkspaceEngine();
+    const result = await engine.create(projectDir, { force: true });
+
+    expect(result.workspaceProject).toBe(workspaceDir);
+    await expect(readFile(join(workspaceDir, 'package.json'), 'utf8')).resolves.toBe(
+      '{"name":"crm"}',
+    );
+    await expect(readFile(join(workspaceDir, 'old.txt'), 'utf8')).rejects.toThrow();
+  });
+
   it('lanza WorkspaceError cuando el workspace ya existe', async () => {
     const projectDir = await createTempProject({
       'README.md': '# Demo',

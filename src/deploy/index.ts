@@ -254,6 +254,7 @@ export class DeployService {
         cwd,
         timeout: 600_000,
         maxBuffer: 10 * 1024 * 1024,
+        env: this.buildDeployEnv(),
       });
 
       return {
@@ -273,5 +274,19 @@ export class DeployService {
         error: execError.message ?? 'Error desconocido',
       };
     }
+  }
+
+  private buildDeployEnv(): NodeJS.ProcessEnv {
+    const env = { ...process.env };
+
+    if (process.env.FIREBASE_TOKEN) {
+      env.FIREBASE_TOKEN = process.env.FIREBASE_TOKEN;
+    }
+
+    if (process.env.NETLIFY_AUTH_TOKEN) {
+      env.NETLIFY_AUTH_TOKEN = process.env.NETLIFY_AUTH_TOKEN;
+    }
+
+    return env;
   }
 }

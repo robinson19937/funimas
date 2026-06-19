@@ -13,6 +13,8 @@ const FIRESTORE_CALLS: Record<string, SemanticOperationType> = {
   onSnapshot: 'DATABASE_READ',
 };
 
+const UNSUPPORTED_FIRESTORE_CALLS = new Set(['runTransaction', 'writeBatch']);
+
 export class FirestoreRule implements SemanticRule {
   readonly id = 'firebase-firestore';
   readonly name = 'Firestore Rule';
@@ -35,6 +37,26 @@ export class FirestoreRule implements SemanticRule {
             category: 'firestore',
             callee: match.calleeName,
             ruleId: this.id,
+            supported: true,
+          },
+        }),
+      );
+    }
+
+    for (const match of context.findCallExpressions([...UNSUPPORTED_FIRESTORE_CALLS])) {
+      operations.push(
+        new SemanticOperation({
+          type: 'CUSTOM',
+          file: match.sourceFile.getFilePath(),
+          line: match.line,
+          column: match.column,
+          description: `Operación Firestore no soportada: ${match.calleeName}()`,
+          metadata: {
+            provider: 'firebase',
+            category: 'firestore',
+            callee: match.calleeName,
+            ruleId: this.id,
+            supported: false,
           },
         }),
       );

@@ -125,6 +125,7 @@ export class DeployReadinessChecker {
     checks.push(await this.checkNetlifyToml(workspacePath));
     checks.push(await this.checkEnvFile(workspacePath));
     checks.push(await this.checkConfigCollections(workspacePath));
+    checks.push(this.checkCiAuthTokens());
 
     const ready = checks.every((check) => check.passed || check.level === 'warning');
 
@@ -278,5 +279,43 @@ export class DeployReadinessChecker {
         message: 'No se pudo leer funimas.config.json',
       };
     }
+  }
+
+  private checkCiAuthTokens(): DeployReadinessCheck {
+    const hasFirebaseToken = Boolean(process.env.FIREBASE_TOKEN);
+    const hasNetlifyToken = Boolean(process.env.NETLIFY_AUTH_TOKEN);
+
+    if (hasFirebaseToken && hasNetlifyToken) {
+      return {
+        name: 'ci-auth',
+        passed: true,
+        level: 'warning',
+        message: 'Tokens CI detectados (FIREBASE_TOKEN, NETLIFY_AUTH_TOKEN)',
+      };
+    }
+
+    if (hasFirebaseToken || hasNetlifyToken) {
+      const missing = [
+        !hasFirebaseToken ? 'FIREBASE_TOKEN' : undefined,
+        !hasNetlifyToken ? 'NETLIFY_AUTH_TOKEN' : undefined,
+      ]
+        .filter(Boolean)
+        .join(', ');
+
+      return {
+        name: 'ci-auth',
+        passed: true,
+        level: 'warning',
+        message: `Token CI parcial. Falta: ${missing}. En local usa firebase login / netlify login.`,
+      };
+    }
+
+    return {
+      name: 'ci-auth',
+      passed: true,
+      level: 'warning',
+      message:
+        'Sin tokens CI. En GitHub Actions define FIREBASE_TOKEN y NETLIFY_AUTH_TOKEN, o usa login interactivo.',
+    };
   }
 }

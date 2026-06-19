@@ -5,11 +5,16 @@ import {
   assertProjectDirectoryExists,
   assertWorkspaceDoesNotExist,
   getWorkspaceProjectPath,
+  removeWorkspaceIfExists,
 } from './WorkspaceUtils.js';
 import { copyProjectContents } from '../utils/project-fs.js';
 
+export interface WorkspaceCreateOptions {
+  force?: boolean;
+}
+
 export interface WorkspaceService {
-  create(projectPath: string): Promise<WorkspaceResult>;
+  create(projectPath: string, options?: WorkspaceCreateOptions): Promise<WorkspaceResult>;
 }
 
 export interface WorkspaceEngineOptions {
@@ -23,14 +28,22 @@ export class WorkspaceEngine implements WorkspaceService {
     this.now = options.now ?? (() => new Date());
   }
 
-  async create(projectPath: string): Promise<WorkspaceResult> {
+  async create(
+    projectPath: string,
+    options: WorkspaceCreateOptions = {},
+  ): Promise<WorkspaceResult> {
     const startedAt = this.now();
     const originalProject = resolve(projectPath);
 
     await assertProjectDirectoryExists(originalProject);
 
     const workspaceProject = getWorkspaceProjectPath(originalProject);
-    await assertWorkspaceDoesNotExist(workspaceProject);
+
+    if (options.force) {
+      await removeWorkspaceIfExists(workspaceProject);
+    } else {
+      await assertWorkspaceDoesNotExist(workspaceProject);
+    }
 
     const filesCopied = await copyProjectContents(originalProject, workspaceProject);
     const finishedAt = this.now();

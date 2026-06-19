@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises';
+import { access, rm } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 
 import {
@@ -49,4 +49,19 @@ export async function assertWorkspaceDoesNotExist(workspacePath: string): Promis
 
     throw error;
   }
+}
+
+export async function removeWorkspaceIfExists(workspacePath: string): Promise<boolean> {
+  try {
+    await access(workspacePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false;
+    }
+
+    throw error;
+  }
+
+  await rm(workspacePath, { recursive: true, force: true });
+  return true;
 }
