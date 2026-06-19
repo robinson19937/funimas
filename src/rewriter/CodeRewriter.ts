@@ -11,6 +11,7 @@ import { DatabaseSetRewriteRule } from './rules/DatabaseSetRewriteRule.js';
 import { DatabaseUpdateRewriteRule } from './rules/DatabaseUpdateRewriteRule.js';
 import { DatabaseDeleteRewriteRule } from './rules/DatabaseDeleteRewriteRule.js';
 import { DatabaseReadRewriteRule } from './rules/DatabaseReadRewriteRule.js';
+import { DatabaseSubscribeRewriteRule } from './rules/DatabaseSubscribeRewriteRule.js';
 import type { SemanticOperation } from '../semantic/SemanticOperation.js';
 
 interface PendingRewrite {
@@ -163,6 +164,7 @@ export function createDefaultRewriteRegistry(): RewriteRegistry {
   registry.register(new DatabaseUpdateRewriteRule());
   registry.register(new DatabaseDeleteRewriteRule());
   registry.register(new DatabaseReadRewriteRule());
+  registry.register(new DatabaseSubscribeRewriteRule());
 
   return registry;
 }

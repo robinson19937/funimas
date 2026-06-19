@@ -135,19 +135,29 @@ flowchart LR
 
 ### Qué transforma hoy (automático)
 
-| Operación detectada | Qué hace Funimas |
-| ------------------- | ---------------- |
-| `addDoc()` | Reescribe a `Funimas.database.insert()` y enruta al servidor |
+| Operación Firestore | Reescritura automática |
+| ------------------- | ---------------------- |
+| `addDoc()` | `Funimas.database.insert(collection, data)` |
+| `setDoc()` | `Funimas.database.set(collection, id, data)` |
+| `updateDoc()` | `Funimas.database.update(collection, id, data)` |
+| `deleteDoc()` | `Funimas.database.delete(collection, id)` |
+| `getDoc()` | `Funimas.database.get(collection, id)` |
+| `getDocs()` | `Funimas.database.list(collection)` |
+| `onSnapshot(doc(...))` | `Funimas.database.poll(collection, id, callback)` |
+| `onSnapshot(collection(...))` | `Funimas.database.pollCollection(collection, callback)` |
 
-### Qué aún requiere migración manual en tu código
+También resuelve `const ref = doc(...)` / `const col = collection(...)` usados como argumento.
 
-Si tu app usa estas APIs de Firestore en el cliente, **debes cambiarlas tú** al SDK (o dejar que Funimas las soporte en una versión futura):
+`poll` y `pollCollection` usan el servidor (polling cada ~5 s por defecto). El callback recibe un objeto compatible con snapshot de Firestore (`exists()`, `data()`, `id`; en colecciones `docs`, `empty`, `forEach`).
 
-- `getDoc` / `getDocs` → `Funimas.database.fetchClubDocument()` (o equivalente)
-- `setDoc` / `updateDoc` / `runTransaction` → `Funimas.database.mutateClubDocument()` con acciones tipadas
-- `onSnapshot` → `Funimas.database.pollClubDocument()` (polling en v1)
+### Qué aún requiere migración manual
 
-Ver el ejemplo completo en `examples/tenis-monorepo/tenis/src/lib/firestoreClub.ts`.
+| API | Estado |
+| --- | ------ |
+| `runTransaction` | No detectado — migrar a mutaciones del SDK o lógica de dominio |
+| Lógica de dominio compleja (clubs/ladder) | Métodos tipados: `fetchClubDocument`, `mutateClubDocument`, `pollClubDocument` |
+
+Ver el ejemplo en `examples/tenis-monorepo/tenis/src/lib/firestoreClub.ts`.
 
 ---
 

@@ -12,6 +12,7 @@ const FIRESTORE_CALLEES = new Set([
   'deleteDoc',
   'getDoc',
   'getDocs',
+  'onSnapshot',
   'collection',
   'doc',
 ]);
