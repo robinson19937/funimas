@@ -347,15 +347,29 @@ También procesa **scripts `<script type="module">` inline en HTML**, los reescr
 | ----------- | ----------- |
 | `addDoc(collection, data)` | `Funimas.database.insert(collection, data)` |
 | `setDoc(doc(...), data)` | `Funimas.database.set(collection, id, data)` |
+| `setDoc(doc(...), data, { merge: true })` | `Funimas.database.upsertDocument(collection, id, data)` |
 | `updateDoc(doc(...), data)` | `Funimas.database.update(collection, id, data)` |
 | `deleteDoc(doc(...))` | `Funimas.database.delete(collection, id)` |
 | `getDoc(doc(...))` | `Funimas.database.get(collection, id)` |
 | `getDocs(collection(...))` | `Funimas.database.list(collection)` |
 | `getDocs(query(..., where(...)))` | `Funimas.database.listWhere(collection, field, op, value)` |
-| Paths con subcolecciones | `getAtPath`, `setAtPath`, `updateAtPath`, `deleteAtPath` |
+| Paths con subcolecciones | `getAtPath`, `setAtPath`, `upsertDocumentAtPath`, `updateAtPath`, `deleteAtPath` |
 | `deleteDoc(snap.ref)` tras `Funimas.database.get` | `Funimas.database.delete(...)` |
 | `onSnapshot(doc(...))` | `Funimas.database.poll(collection, id, callback)` |
 | `onSnapshot(collection(...))` | `Funimas.database.pollCollection(collection, callback)` |
+
+### Semántica de escrituras del SDK
+
+Usa helpers explícitos para evitar altas a medias:
+
+| Helper | Semántica |
+| ------ | --------- |
+| `insert(collection, data)` | Crea un documento nuevo con ID automático. |
+| `createDocument(collection, id, data)` / `createDocumentAtPath(...)` | Crea con ID conocido y falla si el documento ya existe. |
+| `set(collection, id, data)` / `setAtPath(...)` | Reemplaza el documento completo y lo crea si no existe. |
+| `upsertDocument(collection, id, data)` / `upsertDocumentAtPath(...)` | Crea o mezcla campos (`merge`) sin borrar campos existentes; recomendado para datos iniciales idempotentes como `companies/{companyId}/settings/main`. |
+| `update(collection, id, data)` / `updateAtPath(...)` | Alias histórico de `updateExistingDocument*`; solo actualiza documentos existentes. Si el documento no existe, el backend responde: “No se puede actualizar un documento inexistente. Usa set/upsert para creación inicial.” |
+| `updateExistingDocument(collection, id, data)` / `updateExistingDocumentAtPath(...)` | Nombre explícito para updates parciales que exigen existencia previa. |
 
 ### Firebase Auth — configuración automática
 
@@ -368,7 +382,6 @@ Login y registro **siguen en el cliente**. Si Funimas detecta `getAuth(app)`, co
 | `runTransaction` | Migrar a mutaciones del SDK o lógica en el servidor |
 | `writeBatch` | Reemplazar por operaciones individuales del SDK |
 | Firebase Storage (`uploadBytes`, `getDownloadURL`, …) | Migración manual o futura versión de Funimas |
-| `setDoc` con `{ merge: true }` vía refs dinámicas | Revisar caso a caso |
 
 Usa `funimas status` para ver el inventario exacto de tu proyecto.
 

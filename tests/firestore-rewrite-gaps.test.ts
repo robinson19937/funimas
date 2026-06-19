@@ -197,7 +197,7 @@ export async function bumpUsage(companyId) {
       "Funimas.database.getAtPath('companies', companyId, 'subscription', SUBSCRIPTION_DOC_ID)",
     );
     expect(content).toContain(
-      "Funimas.database.updateAtPath('companies', companyId, 'subscription', SUBSCRIPTION_DOC_ID",
+      "Funimas.database.upsertDocumentAtPath('companies', companyId, 'subscription', SUBSCRIPTION_DOC_ID",
     );
     expect(content).toContain("return Funimas.database.getAtPath('companies', companyId, 'subscription', SUBSCRIPTION_DOC_ID)");
     expect(content).not.toContain('getDoc(getSubscriptionRef');
@@ -222,7 +222,7 @@ export async function deleteCompanyDoc(collectionName, id, companyId) {
     expect(content).not.toContain('getDoc(doc(');
   });
 
-  it('convierte setDoc con merge:true a updateAtPath', async () => {
+  it('convierte setDoc con merge:true a upsertDocumentAtPath', async () => {
     const content = await rewriteContent(`import { doc, db, setDoc, serverTimestamp } from './firebase.js';
 
 export async function saveSettings(companyId, updates) {
@@ -232,7 +232,7 @@ export async function saveSettings(companyId, updates) {
 `);
 
     expect(content).toContain(
-      "Funimas.database.updateAtPath('companies', companyId, 'settings', 'main'",
+      "Funimas.database.upsertDocumentAtPath('companies', companyId, 'settings', 'main'",
     );
     expect(content).not.toContain('setDoc(settingsRef');
   });

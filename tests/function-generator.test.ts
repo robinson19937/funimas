@@ -107,8 +107,11 @@ describe('SDKGenerator', () => {
     expect(sdkIndex).toContain('Object.assign(Funimas, configured)');
     expect(browserSdk).toContain('export class DatabaseClient');
     expect(browserSdk).toContain('__funimasFirestoreSentinel');
+    expect(browserSdk).toContain('async upsertDocument');
+    expect(browserSdk).toContain("'/upsert'");
     expect(databaseClient).toContain('export class DatabaseClient');
     expect(databaseClient).toContain('insert(');
+    expect(databaseClient).toContain('updateExistingDocument(');
     expect(databaseClient).toContain('createQuerySnapshot');
   });
 });

@@ -243,8 +243,12 @@ export class DatabaseClient {
   async get(collection, id) {
     try {
       return createDocumentSnapshot(await this.request('POST', '/read', { collection, id }), id);
-    } catch {
-      return createDocumentSnapshot(undefined, id);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return createDocumentSnapshot(undefined, id);
+      }
+
+      throw error;
     }
   }
 
@@ -253,8 +257,12 @@ export class DatabaseClient {
     const id = path.at(-1) ?? '';
     try {
       return createDocumentSnapshot(await this.request('POST', '/read', { path }), id);
-    } catch {
-      return createDocumentSnapshot(undefined, id);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return createDocumentSnapshot(undefined, id);
+      }
+
+      throw error;
     }
   }
 
@@ -275,17 +283,45 @@ export class DatabaseClient {
     await this.request('POST', '/set', { collection, id, data });
   }
 
+  async createDocument(collection, id, data) {
+    await this.request('POST', '/create', { collection, id, data });
+  }
+
+  async upsertDocument(collection, id, data) {
+    await this.request('POST', '/upsert', { collection, id, data });
+  }
+
   async setAtPath(...args) {
     const data = args.at(-1);
     const path = args.slice(0, -1).map(String);
     await this.request('POST', '/set', { path, data });
   }
 
+  async createDocumentAtPath(...args) {
+    const data = args.at(-1);
+    const path = args.slice(0, -1).map(String);
+    await this.request('POST', '/create', { path, data });
+  }
+
+  async upsertDocumentAtPath(...args) {
+    const data = args.at(-1);
+    const path = args.slice(0, -1).map(String);
+    await this.request('POST', '/upsert', { path, data });
+  }
+
   async update(collection, id, data) {
+    await this.updateExistingDocument(collection, id, data);
+  }
+
+  async updateExistingDocument(collection, id, data) {
     await this.request('POST', '/update', { collection, id, data });
   }
 
   async updateAtPath(...args) {
+    await this.updateExistingDocumentAtPath(...args);
+  }
+
+  async updateExistingDocumentAtPath(...args) {
     const data = args.at(-1);
     const path = args.slice(0, -1).map(String);
     await this.request('POST', '/update', { path, data });
