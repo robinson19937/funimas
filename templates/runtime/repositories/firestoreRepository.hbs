@@ -59,7 +59,11 @@ export class FirestoreRepository {
   }
 
   async getDocument(collection: string, id: string): Promise<Record<string, unknown> | null> {
-    const snapshot = await getDb().collection(collection).doc(id).get();
+    return this.getDocumentByPath([collection, id]);
+  }
+
+  async getDocumentByPath(pathSegments: string[]): Promise<Record<string, unknown> | null> {
+    const snapshot = await getDb().doc(this.toDocumentPath(pathSegments)).get();
 
     if (!snapshot.exists) {
       return null;
@@ -77,12 +81,34 @@ export class FirestoreRepository {
     }));
   }
 
+  async listDocumentsWhere(
+    collection: string,
+    filters: Array<{ field: string; operator: string; value: unknown }>,
+  ): Promise<Record<string, unknown>[]> {
+    let queryRef: any = getDb().collection(collection);
+
+    for (const filter of filters) {
+      queryRef = queryRef.where(filter.field, filter.operator, filter.value);
+    }
+
+    const snapshot = await queryRef.get();
+
+    return snapshot.docs.map((document: { id: string; data(): Record<string, unknown> | undefined }) => ({
+      id: document.id,
+      ...(document.data() as Record<string, unknown>),
+    }));
+  }
+
   async setDocument(
     collection: string,
     id: string,
     data: Record<string, unknown>,
   ): Promise<void> {
-    await getDb().collection(collection).doc(id).set(data);
+    await this.setDocumentByPath([collection, id], data);
+  }
+
+  async setDocumentByPath(pathSegments: string[], data: Record<string, unknown>): Promise<void> {
+    await getDb().doc(this.toDocumentPath(pathSegments)).set(data);
   }
 
   async updateDocument(
@@ -90,10 +116,22 @@ export class FirestoreRepository {
     id: string,
     data: Record<string, unknown>,
   ): Promise<void> {
-    await getDb().collection(collection).doc(id).update(data);
+    await this.updateDocumentByPath([collection, id], data);
+  }
+
+  async updateDocumentByPath(pathSegments: string[], data: Record<string, unknown>): Promise<void> {
+    await getDb().doc(this.toDocumentPath(pathSegments)).update(data);
   }
 
   async deleteDocument(collection: string, id: string): Promise<void> {
-    await getDb().collection(collection).doc(id).delete();
+    await this.deleteDocumentByPath([collection, id]);
+  }
+
+  async deleteDocumentByPath(pathSegments: string[]): Promise<void> {
+    await getDb().doc(this.toDocumentPath(pathSegments)).delete();
+  }
+
+  private toDocumentPath(pathSegments: string[]): string {
+    return pathSegments.map((segment) => String(segment)).join('/');
   }
 }

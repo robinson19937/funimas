@@ -4,7 +4,7 @@ import type { SemanticOperation } from '../../semantic/SemanticOperation.js';
 import type { RewriteApplication } from '../RewriteApplication.js';
 import type { RewriteContext } from '../RewriteContext.js';
 import type { RewriteRule } from '../RewriteRule.js';
-import { extractDocReference } from '../firestore-rewrite-utils.js';
+import { extractDeleteDocumentPath, formatDocumentPathCall } from '../firestore-rewrite-utils.js';
 import { findCallExpressionAt } from '../rewrite-utils.js';
 
 export class DatabaseDeleteRewriteRule implements RewriteRule {
@@ -31,14 +31,14 @@ export class DatabaseDeleteRewriteRule implements RewriteRule {
       return null;
     }
 
-    const docReference = extractDocReference(callExpression);
+    const docReference = extractDeleteDocumentPath(callExpression);
 
     if (!docReference) {
       return null;
     }
 
     const before = callExpression.getText();
-    const after = `Funimas.database.delete('${docReference.collection}', ${docReference.docId})`;
+    const after = formatDocumentPathCall('delete', docReference);
 
     callExpression.replaceWithText(after);
 

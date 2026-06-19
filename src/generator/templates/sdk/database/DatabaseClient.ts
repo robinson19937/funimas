@@ -131,24 +131,100 @@ export class DatabaseClient {
     await this.request('POST', '/insert', { collection, data });
   }
 
-  async get(collection: string, id: string): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>('POST', '/read', { collection, id });
+  async get(collection: string, id: string): Promise<{
+    exists: () => boolean;
+    data: () => Record<string, unknown> | undefined;
+    id: string;
+  }> {
+    try {
+      const data = await this.request<Record<string, unknown>>('POST', '/read', {
+        collection,
+        id,
+      });
+
+      return {
+        exists: () => true,
+        data: () => data,
+        id: String(data.id ?? id),
+      };
+    } catch {
+      return {
+        exists: () => false,
+        data: () => undefined,
+        id,
+      };
+    }
+  }
+
+  async getAtPath(...pathSegments: Array<string | number>): Promise<{
+    exists: () => boolean;
+    data: () => Record<string, unknown> | undefined;
+    id: string;
+  }> {
+    const path = pathSegments.map(String);
+    const id = path.at(-1) ?? '';
+
+    try {
+      const data = await this.request<Record<string, unknown>>('POST', '/read', { path });
+
+      return {
+        exists: () => true,
+        data: () => data,
+        id: String(data.id ?? id),
+      };
+    } catch {
+      return {
+        exists: () => false,
+        data: () => undefined,
+        id,
+      };
+    }
   }
 
   async list(collection: string): Promise<Record<string, unknown>[]> {
     return this.request<Record<string, unknown>[]>('POST', '/list', { collection });
   }
 
+  async listWhere(
+    collection: string,
+    field: string,
+    operator: string,
+    value: unknown,
+  ): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>('POST', '/list', {
+      collection,
+      filters: [{ field, operator, value }],
+    });
+  }
+
   async set(collection: string, id: string, data: unknown): Promise<void> {
     await this.request('POST', '/set', { collection, id, data });
+  }
+
+  async setAtPath(...args: Array<string | number | Record<string, unknown>>): Promise<void> {
+    const data = args.at(-1) as Record<string, unknown>;
+    const path = args.slice(0, -1).map(String);
+    await this.request('POST', '/set', { path, data });
   }
 
   async update(collection: string, id: string, data: unknown): Promise<void> {
     await this.request('POST', '/update', { collection, id, data });
   }
 
+  async updateAtPath(...args: Array<string | number | Record<string, unknown>>): Promise<void> {
+    const data = args.at(-1) as Record<string, unknown>;
+    const path = args.slice(0, -1).map(String);
+    await this.request('POST', '/update', { path, data });
+  }
+
   async delete(collection: string, id: string): Promise<void> {
     await this.request('POST', '/delete', { collection, id });
+  }
+
+  async deleteAtPath(...pathSegments: Array<string | number>): Promise<void> {
+    await this.request('POST', '/delete', {
+      path: pathSegments.map(String),
+    });
   }
 
   poll(
@@ -166,12 +242,8 @@ export class DatabaseClient {
     const run = async () => {
       while (active) {
         try {
-          const data = await this.get(collection, id);
-          onNext({
-            exists: () => true,
-            data: () => data,
-            id: String(data.id ?? id),
-          });
+          const snapshot = await this.get(collection, id);
+          onNext(snapshot);
         } catch {
           onNext({
             exists: () => false,

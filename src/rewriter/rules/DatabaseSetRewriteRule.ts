@@ -4,7 +4,7 @@ import type { SemanticOperation } from '../../semantic/SemanticOperation.js';
 import type { RewriteApplication } from '../RewriteApplication.js';
 import type { RewriteContext } from '../RewriteContext.js';
 import type { RewriteRule } from '../RewriteRule.js';
-import { extractDocReference } from '../firestore-rewrite-utils.js';
+import { extractDocReference, formatDocumentPathCall } from '../firestore-rewrite-utils.js';
 import { findCallExpressionAt } from '../rewrite-utils.js';
 
 export class DatabaseSetRewriteRule implements RewriteRule {
@@ -39,7 +39,7 @@ export class DatabaseSetRewriteRule implements RewriteRule {
     }
 
     const before = callExpression.getText();
-    const after = `Funimas.database.set('${docReference.collection}', ${docReference.docId}, ${dataArgument.getText()})`;
+    const after = formatDocumentPathCall('set', docReference, [dataArgument.getText()]);
 
     callExpression.replaceWithText(after);
 

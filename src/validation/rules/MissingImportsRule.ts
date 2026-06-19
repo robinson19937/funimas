@@ -9,7 +9,7 @@ export class MissingImportsRule implements ValidationRule {
 
   private readonly loader: TsMorphProjectLoader;
 
-  constructor(loader: TsMorphProjectLoader = new TsMorphProjectLoader()) {
+  constructor(loader: TsMorphProjectLoader = new TsMorphProjectLoader({ extractHtmlScripts: false })) {
     this.loader = loader;
   }
 
