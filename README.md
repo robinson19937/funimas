@@ -1,219 +1,239 @@
 # Funimas
 
-Herramienta de línea de comandos que protege tu proyecto de software. Analiza el código, crea una copia de trabajo segura y aplica cambios **sin tocar los archivos originales**.
+Herramienta de línea de comandos que protege proyectos con Firebase/Firestore. Analiza el código, crea una copia de trabajo segura y mueve el acceso a datos al servidor **sin tocar los archivos originales**.
+
+Funciona con **cualquier repositorio** que cumpla los requisitos de abajo (React, Vite, Next, etc.). No está limitado a un solo proyecto.
 
 ## ¿Qué necesitas antes de empezar?
 
-1. **Node.js** versión 20 o superior.  
-   Puedes comprobarlo abriendo una terminal y escribiendo:
-
-   ```bash
-   node --version
-   ```
-
-2. **Git** instalado en tu computadora.
-
-3. Una **terminal** (en Windows: PowerShell o CMD; en Mac/Linux: Terminal).
+1. **Node.js** 20 o superior (`node --version`)
+2. **Git**
+3. Una **terminal**
 
 ## Instalación (solo la primera vez)
 
-Copia y pega estos comandos **uno por uno** en la terminal. Espera a que cada uno termine antes de ejecutar el siguiente.
-
 ```bash
 git clone https://github.com/robinson19937/funimas.git
-```
-
-Descarga el proyecto Funimas en tu computadora.
-
-```bash
 cd funimas
-```
-
-Entra en la carpeta del proyecto.
-
-```bash
 npm install
-```
-
-Instala las dependencias necesarias.
-
-```bash
 npm run build
-```
-
-Prepara Funimas para poder usarlo.
-
-```bash
 npm link
 ```
 
-Registra el comando `funimas` en tu sistema. A partir de aquí podrás escribir `funimas` desde cualquier carpeta.
-
-> **Si `npm link` da error de permisos**, puedes usar Funimas sin registrarlo:
+> Si `npm link` da error de permisos:
 >
 > ```bash
 > node dist/cli/index.js protect ./ruta-de-tu-proyecto
 > ```
 
-## Cómo usar Funimas
-
-### Paso 1: Proteger un proyecto
-
-En la terminal, ve a la carpeta donde está tu proyecto (o usa la ruta completa) y ejecuta:
+## Uso básico
 
 ```bash
 funimas protect ./ruta-de-tu-proyecto
 ```
 
-**Ejemplo con el proyecto de demostración incluido:**
+**Ejemplos incluidos:**
 
 ```bash
 funimas protect ./examples/react-firebase-crud
+funimas protect ./examples/tenis-monorepo/tenis   # si apuntas al subproyecto con netlify.toml
 ```
 
-### Paso 2: Qué hace Funimas
+### Qué hace Funimas
 
-1. Crea una **copia de seguridad** de tu proyecto.
-2. Genera una **copia de trabajo** en una carpeta nueva llamada `<tu-proyecto>_funimas`.
-3. Analiza el código y aplica las protecciones necesarias.
-4. Genera informes con los cambios realizados.
+1. Crea **backup** en `<proyecto>/.funimas/backups/`
+2. Genera el workspace **`<proyecto>_funimas/`** (aquí ocurren todos los cambios)
+3. Analiza el código y aplica transformaciones automáticas
+4. Escribe informes en `<proyecto>/.funimas/reports/`
 
-**Tu proyecto original no se modifica.** Todo ocurre en la carpeta nueva.
-
-### Paso 3: Dónde ver los resultados
+**El proyecto original no se modifica.**
 
 | Qué buscas | Dónde está |
 | ---------- | ---------- |
-| Proyecto protegido (copia de trabajo) | `<tu-proyecto>_funimas/` |
-| Copia de seguridad | `.funimas/backups/` (dentro del proyecto original) |
-| Informes de cambios | `.funimas/reports/` (dentro del proyecto original) |
+| Proyecto listo para desplegar | `<proyecto>_funimas/` |
+| Backup | `<proyecto>/.funimas/backups/` |
+| Informe de cambios | `<proyecto>/.funimas/reports/summary.json` |
 
-### Requisitos del proyecto a proteger (versión actual)
+---
 
-- Debe ser un proyecto con código TypeScript o JavaScript.
-- Debe tener un archivo `netlify.toml` en la raíz.
-- Debe usar llamadas `addDoc()` de Firestore (es lo que Funimas protege hoy).
+## Requisitos del proyecto a analizar
 
-## Scripts de desarrollo
+| Requisito | Obligatorio |
+| --------- | ----------- |
+| Código TypeScript o JavaScript | Sí |
+| `netlify.toml` en la raíz | Sí (despliegue en Netlify) |
+| Uso de Firebase/Firestore en el cliente | Sí |
 
-| Script  | Descripción                                      |
-| ------- | ------------------------------------------------ |
-| `dev`   | Ejecuta la CLI en modo desarrollo con recarga    |
-| `build` | Compila TypeScript a JavaScript en `dist/`       |
-| `start` | Ejecuta la versión compilada                     |
-| `test`  | Ejecuta las pruebas unitarias con Vitest         |
-| `lint`  | Analiza el código con ESLint                     |
+### Qué transforma hoy (automático)
 
-## Comandos disponibles
+| Operación detectada | Qué hace Funimas |
+| ------------------- | ---------------- |
+| `addDoc()` | Reescribe a `Funimas.database.insert()` y enruta al servidor |
 
-### `protect <ruta-del-proyecto>`
+### Qué aún requiere migración manual en tu código
 
-Inicializa la protección de un proyecto siguiendo este flujo:
+Si tu app usa estas APIs de Firestore en el cliente, **debes cambiarlas tú** al SDK (o dejar que Funimas las soporte en una versión futura):
 
-1. **Backup** del proyecto original en `.funimas/backups/`
-2. **Workspace** de trabajo en `<proyecto>_funimas` (única copia que Funimas modificará)
-3. **AST Parser** para cargar el proyecto con ts-morph
-4. **Project Scanner** para construir el índice interno del proyecto
-5. **Dependency Graph** para mapear relaciones entre archivos
-6. **Semantic Analyzer** para detectar operaciones semánticas mediante reglas extensibles
-7. **Transformation Planner** para generar el plan de ejecución
-8. **Code Rewriter** para aplicar los cambios en el workspace
-9. **Validation** y generación de **informes**
+- `getDoc` / `getDocs` → `Funimas.database.fetchClubDocument()` (o equivalente)
+- `setDoc` / `updateDoc` / `runTransaction` → `Funimas.database.mutateClubDocument()` con acciones tipadas
+- `onSnapshot` → `Funimas.database.pollClubDocument()` (polling en v1)
 
-```
-Funimas
+Ver el ejemplo completo en `examples/tenis-monorepo/tenis/src/lib/firestoreClub.ts`.
 
-✔ Backup creado
+---
 
-✔ Workspace creado
+## Archivos que genera Funimas (nuevos)
 
-Proyecto original:
-
-/ruta/absoluta/del/proyecto
-
-Proyecto de trabajo:
-
-/ruta/absoluta/del/proyecto_funimas
-
-Analizando estructura...
-
-✔ 58 archivos
-
-✔ 241 imports
-
-✔ 86 funciones
-
-✔ 12 clases
-
-✔ 7 interfaces
-
-✔ 2 enums
-
-Construyendo Dependency Graph...
-
-✔ Nodos: 58
-
-✔ Relaciones: 214
-
-✔ Componentes: 1
-
-Análisis semántico
-
-✔ Firebase detectado
-
-✔ Firestore
-Insert: 6
-Update: 2
-Delete: 1
-Read: 8
-
-✔ Authentication
-Login: 2
-Register: 1
-
-✔ Storage
-Upload: 3
-
-Planificando transformación...
-
-✔ Acciones: 18
-
-✔ Runtime: 1
-
-✔ SDK: 1
-
-✔ Functions: 6
-
-✔ Rewrites: 12
-
-✔ Imports: 12
-
-✔ Validaciones: 1
-```
-
-## Estructura del proyecto
+En `<proyecto>_funimas/` se crean:
 
 ```
-src/
-  cli/         Punto de entrada y comandos de la CLI
-  pipeline/    Orquestador principal del flujo de protección
-  parser/      Carga y modelo AST del proyecto (AstParser / ts-morph)
-  scanner/     Índice interno del proyecto (ProjectScanner)
-  graph/       Grafo de dependencias del proyecto (DependencyGraph)
-  semantic/    Análisis semántico basado en reglas (SemanticAnalyzer)
-  planner/     Planificación de transformaciones
-  generator/   Generación de código (functions, SDK, runtime)
-  rewriter/    Aplicación de cambios en el código
-  validation/  Motor de validación post-transformación
-  rollback/    Reversión parcial de cambios
-  backup/      Motor de copias de seguridad (BackupEngine)
-  workspace/   Copia de trabajo del proyecto (WorkspaceEngine)
-  report/      Generación de informes
-  history/     Historial de transformaciones
-  utils/       Utilidades compartidas
+shared/                          # Lógica de negocio compartida (autorización, mutaciones)
+runtime/
+  handler.ts                     # Punto de entrada del servidor
+  router.ts                        # Rutas HTTP /api/*
+  middleware/authMiddleware.ts     # Verificación de Firebase ID token
+  middleware/authorization.ts    # Reglas de negocio
+  controllers/clubsController.ts
+  repositories/firestoreRepository.ts  # Firebase Admin SDK (Firestore real)
+sdk/
+  index.ts                         # export const Funimas / configureFunimas
+  database/DatabaseClient.ts       # Cliente HTTP con Bearer token
+netlify/functions/
+  funimas.ts                       # Handler principal (/api/clubs/*, /api/insert)
+  database_insert.ts               # Compatibilidad con rewrites addDoc()
+src/types/netlify.d.ts             # (o types/netlify.d.ts)
+src/types/firebase-admin.d.ts      # Stubs para validación TypeScript
+```
+
+También actualiza en el workspace:
+
+- `tsconfig.json` — paths `@funimas/sdk`, `@funimas/shared`
+- `package.json` — añade `@netlify/functions`, `firebase-admin`, `@types/node`
+
+## Archivos que modifica Funimas (en el workspace)
+
+Solo los archivos de tu app donde detecta operaciones transformables. Hoy:
+
+- Archivos con `addDoc(...)` → sustituidos por `Funimas.database.insert(...)` + import de `@funimas/sdk`
+
+El resto de tu código **no se toca**. Revisa siempre `.funimas/reports/changes.md` después de `protect`.
+
+---
+
+## Despliegue: qué es automático y qué es manual
+
+**No basta con subir a GitHub.** Después de `funimas protect` hay pasos manuales obligatorios.
+
+### Checklist de despliegue
+
+#### 1. Trabajar en el workspace (manual)
+
+```bash
+cd <proyecto>_funimas
+npm install
+```
+
+#### 2. Variables de entorno (manual — obligatorio)
+
+**En Netlify** (Site settings → Environment variables). **Nunca** en el cliente:
+
+| Variable | Dónde | Descripción |
+| -------- | ----- | ----------- |
+| `FIREBASE_PROJECT_ID` | Servidor | ID del proyecto Firebase |
+| `FIREBASE_CLIENT_EMAIL` | Servidor | Email del service account |
+| `FIREBASE_PRIVATE_KEY` | Servidor | Clave privada (con `\n` escapados) |
+
+**En el cliente** (`.env` / variables de build):
+
+| Variable | Descripción |
+| -------- | ----------- |
+| `VITE_FIREBASE_API_KEY` | Config Firebase Auth (cliente) |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Dominio Auth |
+| `VITE_FIREBASE_PROJECT_ID` | Mismo project ID |
+| `VITE_FUNIMAS_API_URL` | `/api` en producción (por defecto) |
+
+Plantilla: `examples/tenis-monorepo/tenis/.env.example`
+
+#### 3. `netlify.toml` (manual si no existe el redirect)
+
+Funimas genera las functions, pero tu `netlify.toml` debe exponer la API. Añade si falta:
+
+```toml
+[build]
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/funimas/:splat"
+  status = 200
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["firebase-admin"]
+```
+
+#### 4. Reglas de Firestore (manual — obligatorio para seguridad)
+
+Bloquea escrituras directas desde el navegador. Solo el backend (Admin SDK) debe escribir.
+
+Ejemplo en `examples/tenis-monorepo/tenis/firestore.rules`:
+
+```
+allow read: if request.auth != null;
+allow create, update, delete: if false;   # en colecciones protegidas
+```
+
+Despliega las reglas:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+#### 5. Migrar código Firestore restante (manual si aplica)
+
+Si tu app aún usa `getDoc`, `setDoc`, `runTransaction` u `onSnapshot` para datos de club, migra a `@funimas/sdk` como en el ejemplo `firestoreClub.ts`.
+
+#### 6. Desplegar (manual)
+
+```bash
+cd <proyecto>_funimas
+npm run build          # según tu proyecto
+netlify deploy --prod
+```
+
+O conecta el repo del workspace a Netlify (build + functions automáticos en cada push, **pero las variables de entorno y las reglas Firestore siguen siendo manuales**).
+
+---
+
+## Flujo de datos después de proteger
+
+```
+React (cliente)
+  → Firebase Auth (signIn, getIdToken)     ← sigue en el cliente
+  → @funimas/sdk (Authorization: Bearer)
+  → Netlify Function funimas.ts
+  → runtime/ + Firebase Admin SDK
+  → Firestore
+```
+
+---
+
+## Scripts de desarrollo (repo Funimas)
+
+| Script  | Descripción |
+| ------- | ----------- |
+| `dev`   | CLI en modo desarrollo |
+| `build` | Compila TypeScript |
+| `test`  | Pruebas (Vitest) |
+| `lint`  | ESLint |
+
+## Estructura del repo Funimas (herramienta CLI)
+
+```
+src/           Código de la CLI y pipeline
+templates/     Plantillas del runtime, SDK y functions
+examples/      Proyectos de referencia (react-firebase-crud, tenis-monorepo)
 tests/         Pruebas unitarias
-templates/     Plantillas Handlebars
-examples/      Proyectos de ejemplo
 ```
 
 ## Licencia
