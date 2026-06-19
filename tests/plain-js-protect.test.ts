@@ -55,7 +55,7 @@ describe('plain JS project protect', () => {
     const rewritten = await readFile(join(workspacePath, 'document-review.js'), 'utf8');
 
     expect(rewritten).toContain('Funimas.database.insert');
-    expect(rewritten).toContain("from './sdk/index.js'");
+    expect(rewritten).toContain('from "./sdk/index.js"');
 
     await expect(stat(join(workspacePath, 'tsconfig.json'))).resolves.toBeDefined();
     await expect(stat(join(workspacePath, 'types/netlify.d.ts'))).resolves.toBeDefined();
