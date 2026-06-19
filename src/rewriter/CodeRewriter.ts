@@ -1,6 +1,7 @@
 import { TsMorphProjectLoader } from '../parser/TsMorphProjectLoader.js';
 
 import { Formatter } from './Formatter.js';
+import { FirebaseAuthConfigurator } from './FirebaseAuthConfigurator.js';
 import { ImportManager } from './ImportManager.js';
 import { HtmlScriptExtractor } from '../parser/HtmlScriptExtractor.js';
 import type { RewriteApplication } from './RewriteApplication.js';
@@ -26,6 +27,7 @@ export interface CodeRewriterOptions {
   loader?: TsMorphProjectLoader;
   importManager?: ImportManager;
   formatter?: Formatter;
+  firebaseAuthConfigurator?: FirebaseAuthConfigurator;
   htmlScriptExtractor?: HtmlScriptExtractor;
   now?: () => Date;
 }
@@ -42,6 +44,7 @@ export class CodeRewriter implements CodeRewriterService {
   private readonly loader: TsMorphProjectLoader;
   private readonly importManager: ImportManager;
   private readonly formatter: Formatter;
+  private readonly firebaseAuthConfigurator: FirebaseAuthConfigurator;
   private readonly htmlScriptExtractor: HtmlScriptExtractor;
   private readonly now: () => Date;
 
@@ -50,6 +53,7 @@ export class CodeRewriter implements CodeRewriterService {
     this.loader = options.loader ?? new TsMorphProjectLoader();
     this.importManager = options.importManager ?? new ImportManager();
     this.formatter = options.formatter ?? new Formatter();
+    this.firebaseAuthConfigurator = options.firebaseAuthConfigurator ?? new FirebaseAuthConfigurator();
     this.htmlScriptExtractor = options.htmlScriptExtractor ?? new HtmlScriptExtractor();
     this.now = options.now ?? (() => new Date());
   }
@@ -154,6 +158,28 @@ export class CodeRewriter implements CodeRewriterService {
         }
       }
     }
+
+    const authConfiguration = this.firebaseAuthConfigurator.configure(
+      morphProject,
+      context.workspacePath,
+    );
+
+    for (const filePath of authConfiguration.modifiedFiles) {
+      const sourceFile = morphProject.getSourceFile(filePath);
+
+      if (!sourceFile) {
+        continue;
+      }
+
+      this.formatter.formatAndSave(sourceFile);
+      const displayFileName = this.importManager.getDisplayFileName(filePath);
+
+      if (!modifiedFiles.includes(displayFileName)) {
+        modifiedFiles.push(displayFileName);
+      }
+    }
+
+    importsAdded.push(...authConfiguration.importsAdded);
 
     await this.htmlScriptExtractor.merge(context.workspacePath);
 

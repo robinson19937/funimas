@@ -20,7 +20,7 @@ export interface DeployCommandOptions {
 }
 
 /**
- * Despliega reglas Firestore y el sitio Netlify desde un workspace Funimas.
+ * Despliega reglas Firebase y el sitio Netlify desde un workspace Funimas.
  */
 export class DeployCommand {
   private readonly options: DeployCommandOptions;

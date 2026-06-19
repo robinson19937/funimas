@@ -115,7 +115,7 @@ export interface DeployResult {
 }
 
 /**
- * Orquesta despliegue de reglas Firestore y sitio Netlify vía CLI.
+ * Orquesta despliegue de reglas Firebase y sitio Netlify vía CLI.
  */
 export class DeployService {
   async deploy(options: DeployOptions): Promise<DeployResult> {
@@ -152,7 +152,14 @@ export class DeployService {
     options: DeployOptions,
   ): Promise<DeployStepResult> {
     const projectId = await this.resolveFirebaseProjectId(workspacePath);
-    const args = ['-y', 'firebase-tools@latest', 'deploy', '--only', 'firestore:rules'];
+    const targets = ['firestore:rules'];
+
+    if (await this.fileExists(workspacePath, 'storage.rules')) {
+      targets.push('storage');
+    }
+
+    const args = ['-y', 'firebase-tools@latest', 'deploy', '--only', targets.join(',')];
+    const step = targets.length > 1 ? 'firebase:rules' : 'firestore:rules';
 
     if (projectId) {
       args.push('--project', projectId);
@@ -160,14 +167,23 @@ export class DeployService {
 
     if (options.dryRun) {
       return {
-        step: 'firestore:rules',
+        step,
         success: true,
         command: `npx ${args.join(' ')}`,
-        output: `Dry-run: se desplegarían reglas desde ${join(workspacePath, 'firestore.rules')}`,
+        output: `Dry-run: se desplegarían reglas Firebase desde ${workspacePath}`,
       };
     }
 
-    return this.runStep('firestore:rules', 'npx', args, workspacePath);
+    return this.runStep(step, 'npx', args, workspacePath);
+  }
+
+  private async fileExists(workspacePath: string, relativePath: string): Promise<boolean> {
+    try {
+      await access(join(workspacePath, relativePath));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private async deployNetlify(

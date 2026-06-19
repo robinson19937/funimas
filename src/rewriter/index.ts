@@ -1,4 +1,8 @@
 export { CodeRewriter, createDefaultRewriteRegistry, type CodeRewriterOptions, type CodeRewriterService } from './CodeRewriter.js';
+export {
+  FirebaseAuthConfigurator,
+  type FirebaseAuthConfigurationResult,
+} from './FirebaseAuthConfigurator.js';
 export { Formatter } from './Formatter.js';
 export { ImportManager } from './ImportManager.js';
 export { RewriteContext, type RewriteContextData } from './RewriteContext.js';
