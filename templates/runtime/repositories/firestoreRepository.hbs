@@ -31,6 +31,10 @@ function decodeFirestoreJson(value: unknown): unknown {
     return FieldValue.serverTimestamp();
   }
 
+  if (value[FIRESTORE_SENTINEL_KEY] === 'increment') {
+    return FieldValue.increment(Number(value.amount ?? 1));
+  }
+
   return Object.fromEntries(
     Object.entries(value).map(([key, entry]) => [key, decodeFirestoreJson(entry)]),
   );
@@ -135,7 +139,9 @@ export class FirestoreRepository {
   }
 
   async setDocumentByPath(pathSegments: string[], data: Record<string, unknown>): Promise<void> {
-    await getDb().doc(this.toDocumentPath(pathSegments)).set(decodeWriteData(data));
+    await getDb()
+      .doc(this.toDocumentPath(pathSegments))
+      .set(decodeWriteData(data), { merge: true });
   }
 
   async updateDocument(

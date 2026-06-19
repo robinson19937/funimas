@@ -139,11 +139,14 @@ export function extractDocumentPath(docCall: CallExpression): DocumentPathParts 
 
   const rootArgument = args[1];
 
-  if (!rootArgument || rootArgument.getKind() !== SyntaxKind.StringLiteral) {
+  if (!rootArgument) {
     return undefined;
   }
 
-  const rootCollection = rootArgument.asKindOrThrow(SyntaxKind.StringLiteral).getLiteralValue();
+  const rootCollection =
+    rootArgument.getKind() === SyntaxKind.StringLiteral
+      ? rootArgument.asKindOrThrow(SyntaxKind.StringLiteral).getLiteralValue()
+      : rootArgument.getText().replace(/^['"]|['"]$/g, '');
   const segmentArgs: string[] = [];
 
   for (let index = 1; index < args.length; index += 1) {
@@ -160,15 +163,43 @@ export function extractDocumentPath(docCall: CallExpression): DocumentPathParts 
   return { rootCollection, segmentArgs };
 }
 
-export function extractDocReference(callExpression: CallExpression): DocumentPathParts | undefined {
-  const docArgument = callExpression.getArguments()[0];
-  const docCall = docArgument ? resolveCallExpression(docArgument) : undefined;
+function resolveHelperDocCall(helperCall: CallExpression): CallExpression | undefined {
+  const callee = helperCall.getExpression();
 
-  if (!docCall) {
+  if (callee.getKind() !== SyntaxKind.Identifier) {
     return undefined;
   }
 
-  return extractDocumentPath(docCall);
+  return resolveFunctionReturnCall(callee.asKindOrThrow(SyntaxKind.Identifier));
+}
+
+export function extractDocReference(callExpression: CallExpression): DocumentPathParts | undefined {
+  const docArgument = callExpression.getArguments()[0];
+
+  if (!docArgument) {
+    return undefined;
+  }
+
+  const docCall = resolveCallExpression(docArgument);
+
+  if (docCall) {
+    const documentPath = extractDocumentPath(docCall);
+
+    if (documentPath) {
+      return documentPath;
+    }
+  }
+
+  if (docArgument.getKind() === SyntaxKind.CallExpression) {
+    const helperCall = docArgument.asKindOrThrow(SyntaxKind.CallExpression);
+    const innerDocCall = resolveHelperDocCall(helperCall);
+
+    if (innerDocCall) {
+      return extractDocumentPath(innerDocCall);
+    }
+  }
+
+  return undefined;
 }
 
 /** @deprecated Use extractDocumentPath */

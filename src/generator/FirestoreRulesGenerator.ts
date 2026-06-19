@@ -34,6 +34,27 @@ export class FirestoreRulesGenerator {
   }
 
   async generate(context: GeneratorContext): Promise<FirestoreRulesResult> {
+    const existingRulesPath = join(context.workspacePath, 'firestore.rules');
+
+    try {
+      const existing = await readFile(existingRulesPath, 'utf8');
+
+      if (this.shouldPreserveExistingRules(existing)) {
+        const collections = this.extractCollectionsFromRules(existing);
+
+        return {
+          file: {
+            fileName: 'firestore.rules',
+            relativePath: 'firestore.rules',
+            content: existing.endsWith('\n') ? existing : `${existing}\n`,
+          },
+          collections: collections.length > 0 ? collections : DEFAULT_COLLECTIONS,
+        };
+      }
+    } catch {
+      // Sin reglas previas: generar plantilla restrictiva.
+    }
+
     const collections = await this.resolveCollections(context);
     const content = await this.templateEngine.render(FIRESTORE_RULES_TEMPLATE, {
       collections,
@@ -48,6 +69,18 @@ export class FirestoreRulesGenerator {
     await this.fileWriter.writeFile(context.workspacePath, file);
 
     return { file, collections };
+  }
+
+  private shouldPreserveExistingRules(content: string): boolean {
+    if (content.includes('function isAuthenticated')) {
+      return true;
+    }
+
+    if (/match\s+\/[^/]+\/\{[^}]+\}\/\{[^}]+\}/.test(content)) {
+      return true;
+    }
+
+    return content.includes('function ') && content.includes('allow read');
   }
 
   private async resolveCollections(context: GeneratorContext): Promise<string[]> {
@@ -77,10 +110,10 @@ export class FirestoreRulesGenerator {
   }
 
   private extractCollectionsFromRules(content: string): string[] {
-    const matches = content.matchAll(/match\s+\/([a-zA-Z0-9_-]+)\/\{documentId\}/g);
     const collections = new Set<string>();
+    const topLevelMatches = content.matchAll(/match\s+\/([a-zA-Z0-9_-]+)\/\{[^}]+\}/g);
 
-    for (const match of matches) {
+    for (const match of topLevelMatches) {
       if (match[1]) {
         collections.add(match[1]);
       }
