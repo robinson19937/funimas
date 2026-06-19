@@ -131,7 +131,7 @@ flowchart LR
 | ---------- | ---------- |
 | Proyecto listo para desplegar | `<proyecto>_funimas/` |
 | Backup | `<proyecto>/.funimas/backups/` |
-| Informe de cambios | `<proyecto>/.funimas/reports/summary.json` |
+| Informe de cambios | `<proyecto>/.funimas/reports/changes.html` (diff antes/después + archivos generados) |
 
 ---
 

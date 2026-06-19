@@ -5,6 +5,12 @@ export {
   type ChangeReportSummary,
 } from './ChangeReportGenerator.js';
 export {
+  buildChangeReportViewModel,
+  type ChangeReportViewModel,
+  type ReportFileChanges,
+  type ReportRewriteChange,
+} from './change-report-builder.js';
+export {
   ValidationReportGenerator,
   type ValidationReportGeneratorOptions,
   type ValidationReportResult,

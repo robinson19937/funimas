@@ -190,19 +190,16 @@ describe('Intelligent reports for DATABASE_INSERT', () => {
     const summary = JSON.parse(await readFile(result.summaryPath, 'utf8')) as Record<string, unknown>;
 
     expect(markdown).toContain('DatabaseInsertRewriteRule');
-    expect(markdown).toContain('### Motivo');
+    expect(markdown).toContain('**Motivo:**');
     expect(markdown).toContain(DATABASE_INSERT_REASON);
-    expect(markdown).toContain('### Beneficio');
+    expect(markdown).toContain('**Beneficio:**');
     expect(markdown).toContain('Menor exposición del backend');
-    expect(markdown).toContain('**Nivel de riesgo:** LOW');
+    expect(markdown).toContain('## Resumen');
 
-    expect(html).toContain('<details');
-    expect(html).toContain('ANTES');
-    expect(html).toContain('DESPUÉS');
+    expect(html).toContain('diff-col before');
+    expect(html).toContain('diff-col after');
     expect(html).toContain('Motivo');
     expect(html).toContain('Beneficio');
-    expect(html).toContain('Archivos relacionados');
-    expect(html).toContain('Estado');
     expect(html).toContain(DATABASE_INSERT_REASON);
 
     expect(summary.totalBenefits).toBe(1);

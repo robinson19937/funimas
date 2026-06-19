@@ -1,50 +1,100 @@
-# Funimas Change Report
+# Funimas — Informe de cambios
 
-Versión: {{funimasVersion}}
+**Versión:** {{funimasVersion}}  
+**Fecha:** {{date}}  
+**Duración:** {{duration}} ms  
+**Ejecución:** {{executionId}}
 
-{{#each records}}
-## {{relativeFile}}
+## Resumen
 
-**Regla:** {{rewriteRule}}
-
-**Operación:** {{operation}}
-
-**Nivel de riesgo:** {{riskLevel}}
-
-**Fecha:** {{generatedAt}}
-
-**Versión:** {{compilerVersion}}
-
-### ANTES
-
-```
-{{{before}}}
-```
-
-### DESPUÉS
-
-```
-{{{after}}}
-```
-
-### Motivo
-
-{{reason}}
-
-### Beneficio
-
-{{benefit}}
-
-### Archivos relacionados
-
-{{#each generatedFiles}}
-- {{this}}
-{{/each}}
-
-### Estado
-
-{{status}}
+| Métrica | Valor |
+| ------- | ----- |
+| Archivos modificados | {{stats.filesModified}} |
+| Reescrituras de código | {{stats.codeChanges}} |
+| Archivos generados | {{stats.filesGenerated}} |
+| Operaciones transformadas | {{stats.operationsTransformed}} |
 
 ---
 
+## Cambios en tu código
+
+{{#if fileChanges.length}}
+{{#each fileChanges}}
+### {{relativeFile}}
+
+{{changes.length}} transformación(es) en este archivo.
+
+{{#each changes}}
+#### {{rewriteRule}} — {{operation}}{{#if sourceLine}} (línea {{sourceLine}}){{/if}}
+
+**Antes**
+
+```ts
+{{{before}}}
+```
+
+**Después**
+
+```ts
+{{{after}}}
+```
+
+{{#if reason}}**Motivo:** {{reason}}{{/if}}
+{{#if benefit}}  
+**Beneficio:** {{benefit}}{{/if}}
+{{#if rollbackExecuted}}  
+**Estado:** rollback ejecutado ({{validationStatus}}){{/if}}
+
 {{/each}}
+
+---
+{{/each}}
+{{else}}
+_No se detectaron reescrituras de código en archivos de la aplicación._
+{{/if}}
+
+## Archivos generados por Funimas
+
+{{#if generatedArtifacts.runtime.length}}
+### Runtime (servidor)
+
+{{#each generatedArtifacts.runtime}}
+- `{{this}}`
+{{/each}}
+{{/if}}
+
+{{#if generatedArtifacts.sdk.length}}
+### SDK (cliente)
+
+{{#each generatedArtifacts.sdk}}
+- `{{this}}`
+{{/each}}
+{{/if}}
+
+{{#if generatedArtifacts.functions.length}}
+### Netlify Functions
+
+{{#each generatedArtifacts.functions}}
+- `{{this}}`
+{{/each}}
+{{/if}}
+
+{{#if generatedArtifacts.shared.length}}
+### Shared
+
+{{#each generatedArtifacts.shared}}
+- `{{this}}`
+{{/each}}
+{{/if}}
+
+{{#if generatedArtifacts.other.length}}
+### Otros
+
+{{#each generatedArtifacts.other}}
+- `{{this}}`
+{{/each}}
+{{/if}}
+
+{{#unless stats.filesGenerated}}
+_No se generaron archivos nuevos en esta ejecución._
+{{/unless}}

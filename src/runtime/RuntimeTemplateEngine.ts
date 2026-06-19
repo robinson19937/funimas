@@ -7,6 +7,14 @@ const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 Handlebars.registerHelper('json', (value: unknown) => JSON.stringify(value));
 Handlebars.registerHelper('toLowerCase', (value: string) => String(value).toLowerCase());
+Handlebars.registerHelper('escapeHtml', (value: string) =>
+  String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;'),
+);
+Handlebars.registerHelper('hasItems', (value: unknown) => Array.isArray(value) && value.length > 0);
 
 /**
  * Motor de plantillas Handlebars para runtime y reportes.
