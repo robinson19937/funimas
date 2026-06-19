@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { GeneratedFile } from '../adapters/GeneratedFile.js';
@@ -20,14 +20,15 @@ export class FirebaseConfigGenerator {
   }
 
   async generate(context: GeneratorContext): Promise<FirebaseConfigResult> {
-    const config: Record<string, unknown> = {
-      firestore: {
-        rules: 'firestore.rules',
-      },
+    const config = await this.readExistingConfig(context.workspacePath);
+    config.firestore = {
+      ...(this.isRecord(config.firestore) ? config.firestore : {}),
+      rules: 'firestore.rules',
     };
 
     if (await this.fileExists(context.workspacePath, 'storage.rules')) {
       config.storage = {
+        ...(this.isRecord(config.storage) ? config.storage : {}),
         rules: 'storage.rules',
       };
     }
@@ -50,5 +51,20 @@ export class FirebaseConfigGenerator {
     } catch {
       return false;
     }
+  }
+
+  private async readExistingConfig(workspacePath: string): Promise<Record<string, unknown>> {
+    try {
+      return JSON.parse(await readFile(join(workspacePath, 'firebase.json'), 'utf8')) as Record<
+        string,
+        unknown
+      >;
+    } catch {
+      return {};
+    }
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 }
