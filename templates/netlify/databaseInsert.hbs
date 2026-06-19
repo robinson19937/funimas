@@ -4,30 +4,29 @@ import { createHandler } from '../../runtime/handler.js';
 
 const runtime = createHandler();
 
+function collectHeaders(event: import('@netlify/functions').HandlerEvent): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(event.headers)) {
+    if (value) headers[key.toLowerCase()] = value;
+  }
+  return headers;
+}
+
+/** Compatibilidad con rewrites addDoc() → Funimas.database.insert() */
 export const handler: Handler = async (event) => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    const collection = body.collection;
-    const data = body.data;
-
-    if (!collection || !data) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({
-          success: false,
-          message: 'collection and data are required',
-        }),
-      };
-    }
-
-    const response = await runtime.database.insert({
-      collection,
-      data,
+    const response = await runtime.handle({
+      path: '/api/insert',
+      method: 'POST',
+      body,
+      headers: collectHeaders(event),
     });
 
     return {
-      statusCode: 200,
-      body: JSON.stringify(response),
+      statusCode: response.status,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(response.body),
     };
   } catch (error) {
     return {

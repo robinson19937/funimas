@@ -1,0 +1,23 @@
+{
+  "name": "tenis-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "workspaces": [
+    "tenis"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=tenis",
+    "build": "npm run build --workspace=tenis",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@netlify/functions": "^2.8.2",
+    "firebase": "^11.9.1",
+    "firebase-admin": "^13.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.3",
+    "typescript": "^5.8.3"
+  }
+}

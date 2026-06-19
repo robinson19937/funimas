@@ -62,7 +62,8 @@ describe('DatabaseInsertFunctionGenerator', () => {
 
     expect(content).toContain("import type { Handler } from '@netlify/functions'");
     expect(content).toContain('createHandler');
-    expect(content).toContain('runtime.database.insert');
+    expect(content).toContain('runtime.handle');
+    expect(content).toContain('/api/insert');
     expect(content).not.toContain('Funimas Runtime');
   });
 

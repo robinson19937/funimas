@@ -17,8 +17,10 @@ import { GeneratedFilesRule } from '../src/validation/rules/GeneratedFilesRule.j
 import { SDKStructureRule } from '../src/validation/rules/SDKStructureRule.js';
 import { RuntimeGenerator } from '../src/runtime/RuntimeGenerator.js';
 import { RuntimeContext } from '../src/runtime/RuntimeContext.js';
+import { SharedGenerator } from '../src/runtime/SharedGenerator.js';
 import { SDKGenerator } from '../src/generator/SDKGenerator.js';
 import { GeneratorContext } from '../src/generator/GeneratorContext.js';
+import { WorkspaceConfigGenerator } from '../src/generator/WorkspaceConfigGenerator.js';
 import { SemanticResult } from '../src/semantic/SemanticResult.js';
 import { createEmptyActionsByType } from '../src/planner/PlannerResult.js';
 import { DatabaseInsertFunctionGenerator } from '../src/generator/functions/DatabaseInsertFunctionGenerator.js';
@@ -45,6 +47,17 @@ async function createValidWorkspace(): Promise<string> {
     semanticResult,
     adapter: new NetlifyAdapter(),
   });
+
+  await new WorkspaceConfigGenerator().generate(generatorContext);
+
+  const sharedGenerator = new SharedGenerator();
+  await sharedGenerator.generate(
+    new RuntimeContext({
+      projectPath: '/tmp/original',
+      workspacePath,
+      history,
+    }),
+  );
 
   const sdkGenerator = new SDKGenerator();
   const sdkResult = await sdkGenerator.generate(generatorContext);

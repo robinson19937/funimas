@@ -16,8 +16,16 @@ export const RUNTIME_FILE_DEFINITIONS: RuntimeFileDefinition[] = [
   { templatePath: 'runtime/handler.hbs', outputPath: 'runtime/handler.ts' },
   { templatePath: 'runtime/router.hbs', outputPath: 'runtime/router.ts' },
   {
-    templatePath: 'runtime/controllers/databaseController.hbs',
-    outputPath: 'runtime/controllers/databaseController.ts',
+    templatePath: 'runtime/controllers/clubsController.hbs',
+    outputPath: 'runtime/controllers/clubsController.ts',
+  },
+  {
+    templatePath: 'runtime/middleware/authMiddleware.hbs',
+    outputPath: 'runtime/middleware/authMiddleware.ts',
+  },
+  {
+    templatePath: 'runtime/middleware/authorization.hbs',
+    outputPath: 'runtime/middleware/authorization.ts',
   },
   {
     templatePath: 'runtime/repositories/firestoreRepository.hbs',
@@ -25,6 +33,13 @@ export const RUNTIME_FILE_DEFINITIONS: RuntimeFileDefinition[] = [
   },
   { templatePath: 'runtime/models/Request.hbs', outputPath: 'runtime/models/Request.ts' },
   { templatePath: 'runtime/models/Response.hbs', outputPath: 'runtime/models/Response.ts' },
+];
+
+export const SHARED_FILE_DEFINITIONS: RuntimeFileDefinition[] = [
+  { templatePath: 'shared/index.hbs', outputPath: 'shared/index.ts' },
+  { templatePath: 'shared/challengeAuth.hbs', outputPath: 'shared/challengeAuth.ts' },
+  { templatePath: 'shared/ladderMutations.hbs', outputPath: 'shared/ladderMutations.ts' },
+  { templatePath: 'shared/types/club.hbs', outputPath: 'shared/types/club.ts' },
 ];
 
 export interface RuntimeGeneratorOptions {

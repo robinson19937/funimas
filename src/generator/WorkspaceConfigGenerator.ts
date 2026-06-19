@@ -4,12 +4,13 @@ import { join } from 'node:path';
 import type { GeneratedFile } from '../adapters/GeneratedFile.js';
 import { GeneratorFileWriter } from './GeneratorFileWriter.js';
 import type { GeneratorContext } from './GeneratorContext.js';
-import { renderNetlifyTypes } from './templates/workspace/netlify-types.js';
+import { renderFirebaseAdminTypes, renderNetlifyTypes } from './templates/workspace/netlify-types.js';
 
 const NETLIFY_FUNCTIONS_VERSION = '^2.8.2';
 
 const FUNIMAS_PATHS = {
   '@funimas/sdk': ['./sdk/index.ts'],
+  '@funimas/shared': ['./shared/index.ts'],
 } as const;
 
 const FUNIMAS_INCLUDES = [
@@ -18,6 +19,7 @@ const FUNIMAS_INCLUDES = [
   '**/*.js',
   '**/*.jsx',
   'sdk/**/*',
+  'shared/**/*',
   'runtime/**/*',
   'netlify/**/*',
 ] as const;
@@ -71,6 +73,15 @@ export class WorkspaceConfigGenerator {
     await this.fileWriter.writeFile(workspacePath, typesFile);
     filesWritten.push(typesRelativePath);
 
+    const firebaseAdminTypesFile: GeneratedFile = {
+      fileName: 'firebase-admin.d.ts',
+      relativePath: typesRelativePath.replace('netlify.d.ts', 'firebase-admin.d.ts'),
+      content: renderFirebaseAdminTypes(),
+    };
+
+    await this.fileWriter.writeFile(workspacePath, firebaseAdminTypesFile);
+    filesWritten.push(firebaseAdminTypesFile.relativePath);
+
     await this.ensureTsConfig(workspacePath, typesRelativePath);
     filesWritten.push('tsconfig.json');
 
@@ -108,7 +119,10 @@ export class WorkspaceConfigGenerator {
 
   private createDefaultTsConfig(includeEntries: Set<string>): Record<string, unknown> {
     return {
-      compilerOptions: { ...DEFAULT_COMPILER_OPTIONS },
+      compilerOptions: {
+        ...DEFAULT_COMPILER_OPTIONS,
+        types: ['node'],
+      },
       include: [...includeEntries],
       exclude: [...FUNIMAS_EXCLUDES],
     };
@@ -146,6 +160,10 @@ export class WorkspaceConfigGenerator {
 
     if (compilerOptions.skipLibCheck === undefined) {
       compilerOptions.skipLibCheck = true;
+    }
+
+    if (!compilerOptions.types) {
+      compilerOptions.types = ['node'];
     }
 
     const existingInclude = Array.isArray(existing.include)
@@ -196,7 +214,22 @@ export class WorkspaceConfigGenerator {
       dependencies['@netlify/functions'] = NETLIFY_FUNCTIONS_VERSION;
     }
 
+    if (!dependencies['firebase-admin']) {
+      dependencies['firebase-admin'] = '^13.4.0';
+    }
+
     packageJson.dependencies = dependencies;
+
+    const devDependencies =
+      typeof packageJson.devDependencies === 'object' && packageJson.devDependencies !== null
+        ? (packageJson.devDependencies as Record<string, string>)
+        : {};
+
+    if (!devDependencies['@types/node']) {
+      devDependencies['@types/node'] = '^24.0.3';
+    }
+
+    packageJson.devDependencies = devDependencies;
 
     await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
   }
