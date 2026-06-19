@@ -2,6 +2,7 @@ import { TsMorphProjectLoader } from '../parser/TsMorphProjectLoader.js';
 
 import { Formatter } from './Formatter.js';
 import { ImportManager } from './ImportManager.js';
+import { HtmlScriptExtractor } from '../parser/HtmlScriptExtractor.js';
 import type { RewriteApplication } from './RewriteApplication.js';
 import type { RewriteContext } from './RewriteContext.js';
 import { RewriteRegistry } from './RewriteRegistry.js';
@@ -25,6 +26,7 @@ export interface CodeRewriterOptions {
   loader?: TsMorphProjectLoader;
   importManager?: ImportManager;
   formatter?: Formatter;
+  htmlScriptExtractor?: HtmlScriptExtractor;
   now?: () => Date;
 }
 
@@ -40,6 +42,7 @@ export class CodeRewriter implements CodeRewriterService {
   private readonly loader: TsMorphProjectLoader;
   private readonly importManager: ImportManager;
   private readonly formatter: Formatter;
+  private readonly htmlScriptExtractor: HtmlScriptExtractor;
   private readonly now: () => Date;
 
   constructor(options: CodeRewriterOptions = {}) {
@@ -47,6 +50,7 @@ export class CodeRewriter implements CodeRewriterService {
     this.loader = options.loader ?? new TsMorphProjectLoader();
     this.importManager = options.importManager ?? new ImportManager();
     this.formatter = options.formatter ?? new Formatter();
+    this.htmlScriptExtractor = options.htmlScriptExtractor ?? new HtmlScriptExtractor();
     this.now = options.now ?? (() => new Date());
   }
 
@@ -150,6 +154,8 @@ export class CodeRewriter implements CodeRewriterService {
         }
       }
     }
+
+    await this.htmlScriptExtractor.merge(context.workspacePath);
 
     const finishedAt = this.now();
 

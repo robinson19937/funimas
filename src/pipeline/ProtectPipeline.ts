@@ -38,6 +38,7 @@ import { PlannerContext } from '../planner/PlannerContext.js';
 import { isSupportedFunctionOperation } from '../generator/operation-utils.js';
 import type { PlannerResult } from '../planner/PlannerResult.js';
 import { AstParser, type AstParserService } from '../parser/index.js';
+import { HtmlScriptExtractor } from '../parser/HtmlScriptExtractor.js';
 import { ProjectScanner, type ProjectScannerService } from '../scanner/index.js';
 import type { ScanResult } from '../scanner/ScanResult.js';
 import { SemanticAnalyzer, type SemanticAnalyzerService } from '../semantic/index.js';
@@ -333,6 +334,8 @@ export class ProtectPipeline {
           executionTime: validationResult.duration,
         });
       }
+
+      await new HtmlScriptExtractor().cleanup(workspaceResult.workspaceProject);
     }
 
     this.output.writeln('Actualizando reporte de validación...');

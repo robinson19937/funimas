@@ -1,6 +1,7 @@
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
+import { isFunimasInlineScriptPath } from '../../parser/HtmlScriptExtractor.js';
 import type { ValidationContext } from '../ValidationContext.js';
 import { ValidationError } from '../ValidationError.js';
 import type { ValidationRule, ValidationRuleResult } from '../ValidationRule.js';
@@ -19,6 +20,10 @@ export class MissingFilesRule implements ValidationRule {
     }
 
     for (const record of context.history.getRecords()) {
+      if (isFunimasInlineScriptPath(record.file)) {
+        continue;
+      }
+
       if (record.before.length > 0) {
         filesEvaluated.push(record.file);
 

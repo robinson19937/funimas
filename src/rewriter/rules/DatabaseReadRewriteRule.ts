@@ -7,6 +7,9 @@ import type { RewriteRule } from '../RewriteRule.js';
 import {
   extractCollectionArgument,
   extractDocReference,
+  extractQueryReadParts,
+  formatDocumentPathCall,
+  formatListWhereCall,
 } from '../firestore-rewrite-utils.js';
 import { findCallExpressionAt } from '../rewrite-utils.js';
 
@@ -45,17 +48,23 @@ export class DatabaseReadRewriteRule implements RewriteRule {
         return null;
       }
 
-      after = `Funimas.database.get('${docReference.collection}', ${docReference.docId})`;
+      after = formatDocumentPathCall('get', docReference);
     }
 
     if (callee === 'getDocs') {
-      const collectionArgument = extractCollectionArgument(callExpression);
+      const queryRead = extractQueryReadParts(callExpression);
 
-      if (!collectionArgument) {
-        return null;
+      if (queryRead) {
+        after = formatListWhereCall(queryRead);
+      } else {
+        const collectionArgument = extractCollectionArgument(callExpression);
+
+        if (!collectionArgument) {
+          return null;
+        }
+
+        after = `Funimas.database.list(${collectionArgument})`;
       }
-
-      after = `Funimas.database.list(${collectionArgument})`;
     }
 
     if (!after) {

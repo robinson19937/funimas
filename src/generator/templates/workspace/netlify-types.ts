@@ -70,13 +70,19 @@ declare module 'firebase-admin/firestore' {
     get(ref: DocumentReference): Promise<DocumentSnapshot>;
     set(ref: DocumentReference, data: unknown): void;
   }
+  export interface Query {
+    where(field: string, op: string, value: unknown): Query;
+    get(): Promise<QuerySnapshot>;
+  }
   export interface CollectionReference {
     doc(id?: string): DocumentReference;
     get(): Promise<QuerySnapshot>;
+    where(field: string, op: string, value: unknown): Query;
   }
   export function getFirestore(): Firestore;
   export interface Firestore {
     collection(name: string): CollectionReference;
+    doc(path: string): DocumentReference;
     runTransaction<T>(fn: (transaction: Transaction) => Promise<T>): Promise<T>;
   }
   export const FieldValue: {

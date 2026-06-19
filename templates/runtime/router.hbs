@@ -44,6 +44,28 @@ function getAllowedCollections(): Set<string> {
   return DEFAULT_ALLOWED_COLLECTIONS;
 }
 
+function assertPathAllowed(pathSegments: string[]): void {
+  const rootCollection = pathSegments[0];
+
+  if (!rootCollection) {
+    throw new CollectionNotAllowedError('unknown');
+  }
+
+  assertCollectionAllowed(String(rootCollection));
+}
+
+function parsePathBody(body: { collection?: string; id?: string; path?: string[] }): string[] | null {
+  if (Array.isArray(body.path) && body.path.length >= 2) {
+    return body.path.map(String);
+  }
+
+  if (body.collection && body.id) {
+    return [body.collection, String(body.id)];
+  }
+
+  return null;
+}
+
 function assertCollectionAllowed(collection: string): void {
   const allowed = getAllowedCollections();
 
@@ -179,16 +201,18 @@ export async function routeHttpRequest(request: HttpRequest): Promise<HttpRespon
 
     if (method === 'POST' && path === '/api/read') {
       return handleGenericCrud(request, async () => {
-        const body = request.body as { collection?: string; id?: string };
-        if (!body?.collection || !body?.id) {
+        const body = request.body as { collection?: string; id?: string; path?: string[] };
+        const pathSegments = parsePathBody(body);
+
+        if (!pathSegments) {
           return jsonResponse(400, {
             success: false,
-            message: 'collection e id son obligatorios.',
+            message: 'collection e id, o path, son obligatorios.',
           });
         }
 
-        assertCollectionAllowed(body.collection);
-        const document = await firestoreRepository.getDocument(body.collection, body.id);
+        assertPathAllowed(pathSegments);
+        const document = await firestoreRepository.getDocumentByPath(pathSegments);
 
         if (!document) {
           return jsonResponse(404, { success: false, message: 'Documento no encontrado.' });
@@ -200,7 +224,11 @@ export async function routeHttpRequest(request: HttpRequest): Promise<HttpRespon
 
     if (method === 'POST' && path === '/api/list') {
       return handleGenericCrud(request, async () => {
-        const body = request.body as { collection?: string };
+        const body = request.body as {
+          collection?: string;
+          filters?: Array<{ field: string; operator: string; value: unknown }>;
+        };
+
         if (!body?.collection) {
           return jsonResponse(400, {
             success: false,
@@ -209,7 +237,12 @@ export async function routeHttpRequest(request: HttpRequest): Promise<HttpRespon
         }
 
         assertCollectionAllowed(body.collection);
-        const documents = await firestoreRepository.listDocuments(body.collection);
+
+        const documents =
+          Array.isArray(body.filters) && body.filters.length > 0
+            ? await firestoreRepository.listDocumentsWhere(body.collection, body.filters)
+            : await firestoreRepository.listDocuments(body.collection);
+
         return jsonResponse(200, { success: true, data: documents });
       });
     }
@@ -219,19 +252,22 @@ export async function routeHttpRequest(request: HttpRequest): Promise<HttpRespon
         const body = request.body as {
           collection?: string;
           id?: string;
+          path?: string[];
           data?: Record<string, unknown>;
         };
 
-        if (!body?.collection || !body?.id || !body?.data) {
+        const pathSegments = parsePathBody(body);
+
+        if (!pathSegments || !body?.data) {
           return jsonResponse(400, {
             success: false,
-            message: 'collection, id y data son obligatorios.',
+            message: 'collection/id o path, y data, son obligatorios.',
           });
         }
 
-        assertCollectionAllowed(body.collection);
-        await firestoreRepository.setDocument(body.collection, body.id, body.data);
-        return jsonResponse(200, { success: true, data: { id: body.id } });
+        assertPathAllowed(pathSegments);
+        await firestoreRepository.setDocumentByPath(pathSegments, body.data);
+        return jsonResponse(200, { success: true, data: { id: pathSegments.at(-1) } });
       });
     }
 
@@ -240,36 +276,40 @@ export async function routeHttpRequest(request: HttpRequest): Promise<HttpRespon
         const body = request.body as {
           collection?: string;
           id?: string;
+          path?: string[];
           data?: Record<string, unknown>;
         };
 
-        if (!body?.collection || !body?.id || !body?.data) {
+        const pathSegments = parsePathBody(body);
+
+        if (!pathSegments || !body?.data) {
           return jsonResponse(400, {
             success: false,
-            message: 'collection, id y data son obligatorios.',
+            message: 'collection/id o path, y data, son obligatorios.',
           });
         }
 
-        assertCollectionAllowed(body.collection);
-        await firestoreRepository.updateDocument(body.collection, body.id, body.data);
-        return jsonResponse(200, { success: true, data: { id: body.id } });
+        assertPathAllowed(pathSegments);
+        await firestoreRepository.updateDocumentByPath(pathSegments, body.data);
+        return jsonResponse(200, { success: true, data: { id: pathSegments.at(-1) } });
       });
     }
 
     if (method === 'POST' && path === '/api/delete') {
       return handleGenericCrud(request, async () => {
-        const body = request.body as { collection?: string; id?: string };
+        const body = request.body as { collection?: string; id?: string; path?: string[] };
+        const pathSegments = parsePathBody(body);
 
-        if (!body?.collection || !body?.id) {
+        if (!pathSegments) {
           return jsonResponse(400, {
             success: false,
-            message: 'collection e id son obligatorios.',
+            message: 'collection e id, o path, son obligatorios.',
           });
         }
 
-        assertCollectionAllowed(body.collection);
-        await firestoreRepository.deleteDocument(body.collection, body.id);
-        return jsonResponse(200, { success: true, data: { id: body.id } });
+        assertPathAllowed(pathSegments);
+        await firestoreRepository.deleteDocumentByPath(pathSegments);
+        return jsonResponse(200, { success: true, data: { id: pathSegments.at(-1) } });
       });
     }
 

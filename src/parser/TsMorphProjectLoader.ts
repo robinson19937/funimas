@@ -4,36 +4,61 @@ import { extname, join, sep } from 'node:path';
 
 import { Project } from 'ts-morph';
 
+import { HtmlScriptExtractor, isFunimasInlineScriptPath } from './HtmlScriptExtractor.js';
 import { isExcludedEntry } from '../utils/project-fs.js';
 
 export const SOURCE_FILE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'] as const;
 
 export type SourceFileExtension = (typeof SOURCE_FILE_EXTENSIONS)[number];
 
+export interface TsMorphProjectLoaderOptions {
+  extractHtmlScripts?: boolean;
+}
+
 export class TsMorphProjectLoader {
+  private readonly htmlScriptExtractor = new HtmlScriptExtractor();
+  private readonly extractHtmlScripts: boolean;
+
+  constructor(options: TsMorphProjectLoaderOptions = {}) {
+    this.extractHtmlScripts = options.extractHtmlScripts ?? true;
+  }
+
   async load(projectPath: string): Promise<Project> {
+    const htmlManifest = this.extractHtmlScripts
+      ? await this.htmlScriptExtractor.extract(projectPath)
+      : { entries: [] };
     const tsConfigFilePath = await this.findTsConfigFile(projectPath);
 
+    let project: Project;
+
     if (tsConfigFilePath) {
-      return new Project({
+      project = new Project({
         tsConfigFilePath,
       });
+    } else {
+      project = new Project({
+        skipAddingFilesFromTsConfig: true,
+        compilerOptions: {
+          allowJs: true,
+        },
+      });
+
+      const sourceFilePaths = await this.collectSourceFiles(projectPath);
+
+      for (const sourceFilePath of sourceFilePaths) {
+        project.addSourceFileAtPath(sourceFilePath);
+      }
     }
 
-    const project = new Project({
-      skipAddingFilesFromTsConfig: true,
-      compilerOptions: {
-        allowJs: true,
-      },
-    });
-
-    const sourceFilePaths = await this.collectSourceFiles(projectPath);
-
-    for (const sourceFilePath of sourceFilePaths) {
-      project.addSourceFileAtPath(sourceFilePath);
+    for (const entry of htmlManifest.entries) {
+      project.addSourceFileAtPath(join(projectPath, entry.extractedPath));
     }
 
     return project;
+  }
+
+  getHtmlScriptExtractor(): HtmlScriptExtractor {
+    return this.htmlScriptExtractor;
   }
 
   getIncludedSourceFiles(project: Project): ReturnType<Project['getSourceFiles']> {
@@ -64,6 +89,10 @@ export class TsMorphProjectLoader {
           continue;
         }
 
+        if (isFunimasInlineScriptPath(entry.name)) {
+          continue;
+        }
+
         const entryPath = join(currentDir, entry.name);
 
         if (entry.isDirectory()) {
@@ -83,6 +112,10 @@ export class TsMorphProjectLoader {
   }
 
   private shouldIncludeSourceFile(filePath: string): boolean {
+    if (isFunimasInlineScriptPath(filePath)) {
+      return extname(filePath) === '.js';
+    }
+
     if (!this.isSupportedExtension(extname(filePath))) {
       return false;
     }
