@@ -82,7 +82,7 @@ export class FirestoreRepository {
   async insert(collection: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
     const ref = getDb().collection(collection).doc();
     await ref.set(decodeWriteData(data));
-    return { id: ref.id, path: ref.path };
+    return { id: ref.id };
   }
 
   async getDocument(collection: string, id: string): Promise<Record<string, unknown> | null> {
