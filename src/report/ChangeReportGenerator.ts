@@ -25,6 +25,8 @@ export interface ChangeReportSummary {
   executionId: string;
   codeChanges: number;
   filesGenerated: number;
+  operationsUntransformed: number;
+  workspaceReady: boolean;
 }
 
 export interface ChangeReportResult {
@@ -109,6 +111,8 @@ export class ChangeReportGenerator {
       executionId,
       codeChanges: viewModel.stats.codeChanges,
       filesGenerated: viewModel.stats.filesGenerated,
+      operationsUntransformed: viewModel.stats.operationsUntransformed,
+      workspaceReady: viewModel.workspaceReady,
     };
 
     const markdown = await this.templateEngine.render(

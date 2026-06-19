@@ -53,6 +53,8 @@ import { ValidationError } from '../validation/ValidationError.js';
 import { ValidationResult } from '../validation/ValidationResult.js';
 import { RollbackManager, RollbackContext, type RollbackManagerService } from '../rollback/index.js';
 import type { ProtectPipelineResult } from './ProtectPipelineResult.js';
+import { WorkspaceVerifier } from '../verify/index.js';
+import type { WorkspaceVerificationReport } from '../verify/index.js';
 
 export interface ProtectPipelineOptions {
   projectPath: string;
@@ -80,6 +82,7 @@ export interface ProtectPipelineOptions {
   generatedFileVerifier?: GeneratedFileVerifier;
   workspaceConfigGenerator?: WorkspaceConfigGenerator;
   deployConfigGenerator?: DeployConfigGenerator;
+  workspaceVerifier?: WorkspaceVerifier;
 }
 
 export class ProtectPipeline {
@@ -108,6 +111,7 @@ export class ProtectPipeline {
   private readonly generatedFileVerifier: GeneratedFileVerifier;
   private readonly workspaceConfigGenerator: WorkspaceConfigGenerator;
   private readonly deployConfigGenerator: DeployConfigGenerator;
+  private readonly workspaceVerifier: WorkspaceVerifier;
   private readonly executionId: string;
 
   constructor(options: ProtectPipelineOptions) {
@@ -142,6 +146,7 @@ export class ProtectPipeline {
       options.workspaceConfigGenerator ?? new WorkspaceConfigGenerator();
     this.deployConfigGenerator =
       options.deployConfigGenerator ?? new DeployConfigGenerator();
+    this.workspaceVerifier = options.workspaceVerifier ?? new WorkspaceVerifier();
     this.executionId = randomUUID();
   }
 
@@ -338,6 +343,36 @@ export class ProtectPipeline {
       await new HtmlScriptExtractor().cleanup(workspaceResult.workspaceProject);
     }
 
+    let verificationReport: WorkspaceVerificationReport | undefined;
+
+    if (validationResult.valid) {
+      this.output.writeln('Verificando workspace funcional...');
+      this.output.writeln();
+
+      verificationReport = await this.workspaceVerifier.verify(workspaceResult.workspaceProject, {
+        skipBuild: true,
+        skipDeployReadiness: true,
+        requireEnv: false,
+      });
+
+      for (const check of verificationReport.checks) {
+        const icon = check.passed ? '✔' : check.level === 'error' ? '✗' : '⚠';
+        this.output.writeln(`${icon} ${check.name}: ${check.message}`);
+        this.output.writeln();
+      }
+
+      if (verificationReport.untransformedOperations.length > 0) {
+        this.output.writeln('Operaciones sin transformar:');
+        this.output.writeln();
+
+        for (const finding of verificationReport.untransformedOperations) {
+          const callee = finding.callee ? `${finding.callee}()` : finding.operationType;
+          this.output.writeln(`- ${finding.file}:${finding.line} — ${callee}`);
+          this.output.writeln();
+        }
+      }
+    }
+
     this.output.writeln('Actualizando reporte de validación...');
     this.output.writeln();
 
@@ -384,19 +419,23 @@ export class ProtectPipeline {
       workspaceResult,
       semanticResult,
       validationResult,
+      verificationReport,
       durationMs,
       transformationsRegistered: history.getRecordCount(),
       reportsDirectory,
     });
 
+    const workspaceReady = verificationReport?.ready ?? validationResult.valid;
+
     return {
-      success: validationResult.valid,
+      success: validationResult.valid && workspaceReady,
       executionId: this.executionId,
       projectPath: this.projectPath,
       workspaceResult,
       plannerResult,
       semanticResult,
       validationResult,
+      verificationReport,
       durationMs,
       transformationsRegistered: history.getRecordCount(),
       reportsDirectory,
@@ -407,6 +446,7 @@ export class ProtectPipeline {
     workspaceResult: WorkspaceResult;
     semanticResult: SemanticResult;
     validationResult: ValidationResult;
+    verificationReport?: WorkspaceVerificationReport;
     durationMs: number;
     transformationsRegistered: number;
     reportsDirectory: string;
@@ -422,6 +462,11 @@ export class ProtectPipeline {
     this.output.writeln(
       `Validación: ${summary.validationResult.valid ? 'OK' : 'CON ERRORES'}`,
     );
+    if (summary.verificationReport) {
+      this.output.writeln(
+        `Verificación funcional: ${summary.verificationReport.ready ? 'OK' : 'CON ADVERTENCIAS'}`,
+      );
+    }
     this.output.writeln(`Duración: ${(summary.durationMs / 1000).toFixed(2)}s`);
     this.output.writeln(`Versión: ${VERSION}`);
     this.output.writeln(`Reportes: ${summary.reportsDirectory}`);
@@ -433,7 +478,7 @@ export class ProtectPipeline {
       this.output.writeln(`  cd ${summary.workspaceResult.workspaceProject}`);
       this.output.writeln('  cp .env.example .env   # completa tus credenciales');
       this.output.writeln('  npm install');
-      this.output.writeln('  npm run build');
+      this.output.writeln(`  funimas verify ${summary.workspaceResult.workspaceProject}`);
       this.output.writeln(`  funimas deploy ${summary.workspaceResult.workspaceProject} --import-env --prod`);
       this.output.writeln();
     }

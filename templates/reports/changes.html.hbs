@@ -221,7 +221,31 @@
         <div class="stat"><strong>{{stats.codeChanges}}</strong> reescrituras de código</div>
         <div class="stat"><strong>{{stats.filesGenerated}}</strong> archivos generados</div>
         <div class="stat"><strong>{{stats.operationsTransformed}}</strong> operaciones transformadas</div>
+        <div class="stat"><strong>{{stats.operationsUntransformed}}</strong> sin transformar</div>
       </section>
+
+      {{#if untransformedOperations.length}}
+      <h2 class="section-title">Operaciones sin transformar</h2>
+      <article class="file-card">
+        <p class="meta">
+          {{#if workspaceReady}}
+            Estas operaciones requieren revisión antes de desplegar reglas estrictas.
+          {{else}}
+            El workspace no está listo para producción hasta resolver estas operaciones.
+          {{/if}}
+        </p>
+        <ul class="generated-list">
+          {{#each untransformedOperations}}
+          <li>
+            <code>{{file}}:{{line}}</code>
+            {{#if callee}} — <strong>{{callee}}()</strong>{{/if}}
+            <span class="risk-high">({{reason}})</span>
+            <div class="details">{{recommendation}}</div>
+          </li>
+          {{/each}}
+        </ul>
+      </article>
+      {{/if}}
 
       <h2 class="section-title">Cambios en tu código</h2>
 

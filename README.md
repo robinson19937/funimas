@@ -141,10 +141,13 @@ cp .env.example .env
 
 npm install
 
-# 4. Verificar antes de desplegar
+# 4. Verificar que el workspace es funcional (build + operaciones transformadas)
+funimas verify .
+
+# 5. Verificar configuración de despliegue
 funimas deploy . --check
 
-# 5. Desplegar (reglas Firestore + sitio Netlify)
+# 6. Desplegar (reglas Firestore + sitio Netlify)
 funimas deploy . --import-env --prod
 ```
 
@@ -159,6 +162,7 @@ funimas deploy . --import-env --prod
 | `funimas setup` | Verifica Node, Git y CLIs opcionales |
 | `funimas status [ruta]` | APIs Firestore listas vs pendientes (sin crear workspace) |
 | `funimas protect <ruta>` | Analiza, transforma y genera `<ruta>_funimas/` |
+| `funimas verify [workspace]` | Verifica estructura, operaciones transformadas y build |
 | `funimas deploy [workspace]` | Despliega reglas Firestore y sitio Netlify |
 
 ### `funimas status`
@@ -186,10 +190,28 @@ funimas protect ./mi-proyecto --force   # sobrescribe mi-proyecto_funimas si ya 
 Al finalizar, revisa los reportes:
 
 ```text
-mi-proyecto/.funimas/reports/changes.html      # diff antes/después
-mi-proyecto/.funimas/reports/validation.html   # resultado de validación
-mi-proyecto/.funimas/reports/summary.json      # métricas
+mi-proyecto_funimas/.funimas/reports/changes.html      # diff antes/después
+mi-proyecto_funimas/.funimas/reports/validation.html   # resultado de validación
+mi-proyecto_funimas/.funimas/reports/summary.json      # métricas + operaciones sin transformar
+mi-proyecto_funimas/.funimas/reports/verify.json        # verificación funcional (si se ejecutó verify)
 ```
+
+### `funimas verify`
+
+Comprueba que el workspace protegido es funcional antes de desplegar:
+
+```bash
+funimas verify ./mi-proyecto_funimas
+funimas verify . --skip-build                 # omite npm install/build
+funimas verify . --skip-deploy-readiness      # omite comprobación de .env
+```
+
+Valida:
+
+- Estructura esencial (`runtime/`, `sdk/`, reglas, config)
+- Operaciones Firestore del **código de la app** sin transformar (excluye archivos generados por Funimas)
+- `npm run build` en el workspace (salvo `--skip-build`)
+- Preparación para despliegue (`.env`, `netlify.toml`) cuando no se omite
 
 ### `funimas deploy`
 
@@ -434,7 +456,7 @@ funimas deploy ./mi-proyecto_funimas --import-env --prod
 | Acción | Quién lo hace |
 | ------ | ------------- |
 | Generar `netlify.toml`, reglas, functions, SDK | `funimas protect` |
-| Validar workspace y `.env` | `funimas deploy --check` |
+| Validar workspace y `.env` | `funimas verify` + `funimas deploy --check` |
 | Desplegar reglas Firebase (`firestore.rules` y `storage.rules` si existe) | `funimas deploy` |
 | Importar env a Netlify | `funimas deploy --import-env` |
 | Desplegar sitio + functions | `funimas deploy --prod` |
