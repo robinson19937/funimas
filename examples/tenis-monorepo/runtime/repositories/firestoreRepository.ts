@@ -40,6 +40,28 @@ function decodeWriteData(data: Record<string, unknown>): Record<string, unknown>
   return decodeFirestoreJson(data) as Record<string, unknown>;
 }
 
+export class DocumentAlreadyExistsError extends Error {
+  readonly status = 409;
+  readonly code = 'ALREADY_EXISTS';
+
+  constructor(path: string) {
+    super(`No se puede crear el documento "${path}" porque ya existe.`);
+    this.name = 'DocumentAlreadyExistsError';
+  }
+}
+
+export class DocumentNotFoundForUpdateError extends Error {
+  readonly status = 404;
+  readonly code = 'NOT_FOUND';
+
+  constructor(path: string) {
+    super(
+      `No se puede actualizar un documento inexistente ("${path}"). Usa set/upsert para creación inicial.`,
+    );
+    this.name = 'DocumentNotFoundForUpdateError';
+  }
+}
+
 export class FirestoreRepository {
   async getClub(clubId: string): Promise<ClubDocument | null> {
     const snapshot = await clubRef(clubId).get();
@@ -138,6 +160,40 @@ export class FirestoreRepository {
     await getDb().doc(this.toDocumentPath(pathSegments)).set(decodeWriteData(data));
   }
 
+  async createDocument(
+    collection: string,
+    id: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    await this.createDocumentByPath([collection, id], data);
+  }
+
+  async createDocumentByPath(pathSegments: string[], data: Record<string, unknown>): Promise<void> {
+    const path = this.toDocumentPath(pathSegments);
+    const ref = getDb().doc(path);
+    const snapshot = await ref.get();
+
+    if (snapshot.exists) {
+      throw new DocumentAlreadyExistsError(path);
+    }
+
+    await ref.set(decodeWriteData(data));
+  }
+
+  async upsertDocument(
+    collection: string,
+    id: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    await this.upsertDocumentByPath([collection, id], data);
+  }
+
+  async upsertDocumentByPath(pathSegments: string[], data: Record<string, unknown>): Promise<void> {
+    await getDb()
+      .doc(this.toDocumentPath(pathSegments))
+      .set(decodeWriteData(data), { merge: true });
+  }
+
   async updateDocument(
     collection: string,
     id: string,
@@ -147,7 +203,15 @@ export class FirestoreRepository {
   }
 
   async updateDocumentByPath(pathSegments: string[], data: Record<string, unknown>): Promise<void> {
-    await getDb().doc(this.toDocumentPath(pathSegments)).update(decodeWriteData(data));
+    const path = this.toDocumentPath(pathSegments);
+    const ref = getDb().doc(path);
+    const snapshot = await ref.get();
+
+    if (!snapshot.exists) {
+      throw new DocumentNotFoundForUpdateError(path);
+    }
+
+    await ref.update(decodeWriteData(data));
   }
 
   async deleteDocument(collection: string, id: string): Promise<void> {

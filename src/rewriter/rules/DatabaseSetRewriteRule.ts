@@ -65,7 +65,7 @@ export class DatabaseSetRewriteRule implements RewriteRule {
     }
 
     const before = callExpression.getText();
-    const method = hasMergeOption(callExpression) ? 'update' : 'set';
+    const method = hasMergeOption(callExpression) ? 'upsertDocument' : 'set';
     const after = formatDocumentPathCall(method, docReference, [dataArgument.getText()]);
 
     callExpression.replaceWithText(after);

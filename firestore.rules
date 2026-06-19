@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isNonEmptyString(value, maxLength) {
+      return value is string && value.size() > 0 && value.size() <= maxLength;
+    }
+
+    function hasOnlyKeys(keys) {
+      return request.resource.data.keys().hasOnly(keys);
+    }
+
+    function companyPath(companyId) {
+      return /databases/$(database)/documents/companies/$(companyId);
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function isCompanyOwner(companyId) {
+      return signedIn() &&
+        exists(companyPath(companyId)) &&
+        get(companyPath(companyId)).data.ownerId == request.auth.uid;
+    }
+
+    function belongsToCompany(companyId) {
+      return signedIn() &&
+        exists(userPath(request.auth.uid)) &&
+        get(userPath(request.auth.uid)).data.companyId == companyId;
+    }
+
+    function validUserCreate(uid) {
+      return isSelf(uid) &&
+        hasOnlyKeys(['uid', 'email', 'displayName', 'companyId', 'createdAt', 'updatedAt']) &&
+        request.resource.data.uid == uid &&
+        isNonEmptyString(request.resource.data.email, 320) &&
+        (!('displayName' in request.resource.data) ||
+          isNonEmptyString(request.resource.data.displayName, 120)) &&
+        isNonEmptyString(request.resource.data.companyId, 128);
+    }
+
+    function validUserUpdate(uid) {
+      return isSelf(uid) &&
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.companyId == resource.data.companyId &&
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'updatedAt']);
+    }
+
+    function validCompanyCreate(companyId) {
+      return signedIn() &&
+        hasOnlyKeys(['id', 'name', 'ownerId', 'createdAt', 'updatedAt']) &&
+        request.resource.data.id == companyId &&
+        request.resource.data.ownerId == request.auth.uid &&
+        isNonEmptyString(request.resource.data.name, 160);
+    }
+
+    function validCompanyUpdate(companyId) {
+      return isCompanyOwner(companyId) &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'updatedAt']) &&
+        isNonEmptyString(request.resource.data.name, 160);
+    }
+
+    function validMainSettings(companyId, settingId) {
+      return settingId == 'main' &&
+        isCompanyOwner(companyId) &&
+        request.resource.data.companyId == companyId &&
+        request.resource.data.keys().hasAll(['companyId', 'updatedAt']);
+    }
+
+    function validBusinessDocument() {
+      return signedIn() &&
+        request.resource.data.keys().hasAll(['companyId', 'userId']) &&
+        isNonEmptyString(request.resource.data.companyId, 128) &&
+        request.resource.data.userId == request.auth.uid &&
+        (isCompanyOwner(request.resource.data.companyId) ||
+          belongsToCompany(request.resource.data.companyId));
+    }
+
+    function businessIdentityUnchanged() {
+      return request.resource.data.companyId == resource.data.companyId &&
+        request.resource.data.userId == resource.data.userId;
+    }
+
+    match /users/{uid} {
+      allow create: if validUserCreate(uid);
+      allow read: if isSelf(uid) || isCompanyOwner(resource.data.companyId);
+      allow update: if validUserUpdate(uid);
+      allow delete: if false;
+    }
+
+    match /companies/{companyId} {
+      allow create: if validCompanyCreate(companyId);
+      allow read: if isCompanyOwner(companyId) || belongsToCompany(companyId);
+      allow update: if validCompanyUpdate(companyId);
+      allow delete: if false;
+
+      match /settings/{settingId} {
+        allow create, update: if validMainSettings(companyId, settingId);
+        allow read: if isCompanyOwner(companyId) || belongsToCompany(companyId);
+        allow delete: if false;
+      }
+    }
+
+    match /{collection}/{documentId} {
+      allow create: if collection in ['cotizaciones', 'recibos', 'notas', 'varios'] &&
+        validBusinessDocument();
+      allow read: if collection in ['cotizaciones', 'recibos', 'notas', 'varios'] &&
+        (isCompanyOwner(resource.data.companyId) || belongsToCompany(resource.data.companyId));
+      allow update: if collection in ['cotizaciones', 'recibos', 'notas', 'varios'] &&
+        validBusinessDocument() &&
+        businessIdentityUnchanged();
+      allow delete: if collection in ['cotizaciones', 'recibos', 'notas', 'varios'] &&
+        isCompanyOwner(resource.data.companyId);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

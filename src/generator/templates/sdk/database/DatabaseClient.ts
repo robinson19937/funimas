@@ -280,8 +280,12 @@ export class DatabaseClient {
         id,
       });
       return createDocumentSnapshot(data, id);
-    } catch {
-      return createDocumentSnapshot(undefined, id);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return createDocumentSnapshot(undefined, id);
+      }
+
+      throw error;
     }
   }
 
@@ -292,8 +296,12 @@ export class DatabaseClient {
     try {
       const data = await this.request<JsonRecord>('POST', '/read', { path });
       return createDocumentSnapshot(data, id);
-    } catch {
-      return createDocumentSnapshot(undefined, id);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return createDocumentSnapshot(undefined, id);
+      }
+
+      throw error;
     }
   }
 
@@ -315,8 +323,22 @@ export class DatabaseClient {
     return createQuerySnapshot(documents);
   }
 
+  /**
+   * set reemplaza el documento completo y puede crearlo si no existe.
+   * Para merges idempotentes usa upsertDocument(); para exigir existencia usa updateExistingDocument().
+   */
   async set(collection: string, id: string, data: unknown): Promise<void> {
     await this.request('POST', '/set', { collection, id, data });
+  }
+
+  /** Crea un documento con ID conocido y falla si ya existe. */
+  async createDocument(collection: string, id: string, data: unknown): Promise<void> {
+    await this.request('POST', '/create', { collection, id, data });
+  }
+
+  /** Crea o mezcla campos sin borrar los existentes; seguro para datos iniciales reintentables. */
+  async upsertDocument(collection: string, id: string, data: unknown): Promise<void> {
+    await this.request('POST', '/upsert', { collection, id, data });
   }
 
   async setAtPath(...args: Array<string | number | JsonRecord>): Promise<void> {
@@ -325,11 +347,32 @@ export class DatabaseClient {
     await this.request('POST', '/set', { path, data });
   }
 
+  async createDocumentAtPath(...args: Array<string | number | JsonRecord>): Promise<void> {
+    const data = args.at(-1) as JsonRecord;
+    const path = args.slice(0, -1).map(String);
+    await this.request('POST', '/create', { path, data });
+  }
+
+  async upsertDocumentAtPath(...args: Array<string | number | JsonRecord>): Promise<void> {
+    const data = args.at(-1) as JsonRecord;
+    const path = args.slice(0, -1).map(String);
+    await this.request('POST', '/upsert', { path, data });
+  }
+
+  /** Alias histórico: update solo modifica documentos existentes. */
   async update(collection: string, id: string, data: unknown): Promise<void> {
+    await this.updateExistingDocument(collection, id, data);
+  }
+
+  async updateExistingDocument(collection: string, id: string, data: unknown): Promise<void> {
     await this.request('POST', '/update', { collection, id, data });
   }
 
   async updateAtPath(...args: Array<string | number | JsonRecord>): Promise<void> {
+    await this.updateExistingDocumentAtPath(...args);
+  }
+
+  async updateExistingDocumentAtPath(...args: Array<string | number | JsonRecord>): Promise<void> {
     const data = args.at(-1) as JsonRecord;
     const path = args.slice(0, -1).map(String);
     await this.request('POST', '/update', { path, data });

@@ -1,6 +1,10 @@
 import { authenticateRequest } from './middleware/authMiddleware.js';
 import { AuthorizationError, createClubsController } from './controllers/clubsController.js';
-import { FirestoreRepository } from './repositories/firestoreRepository.js';
+import {
+  DocumentAlreadyExistsError,
+  DocumentNotFoundForUpdateError,
+  FirestoreRepository,
+} from './repositories/firestoreRepository.js';
 import type { AuthenticatedRequest, ApiResponse } from './models/Request.js';
 import type { ClubAction } from '../shared/types/club.js';
 
@@ -55,7 +59,7 @@ function assertPathAllowed(pathSegments: string[]): void {
 }
 
 function parsePathBody(body: { collection?: string; id?: string; path?: string[] }): string[] | null {
-  if (Array.isArray(body.path) && body.path.length >= 2) {
+  if (Array.isArray(body.path) && body.path.length >= 2 && body.path.length % 2 === 0) {
     return body.path.map(String);
   }
 
@@ -271,6 +275,54 @@ export async function routeHttpRequest(request: HttpRequest): Promise<HttpRespon
       });
     }
 
+    if (method === 'POST' && path === '/api/create') {
+      return handleGenericCrud(request, async () => {
+        const body = request.body as {
+          collection?: string;
+          id?: string;
+          path?: string[];
+          data?: Record<string, unknown>;
+        };
+
+        const pathSegments = parsePathBody(body);
+
+        if (!pathSegments || !body?.data) {
+          return jsonResponse(400, {
+            success: false,
+            message: 'collection/id o path, y data, son obligatorios.',
+          });
+        }
+
+        assertPathAllowed(pathSegments);
+        await firestoreRepository.createDocumentByPath(pathSegments, body.data);
+        return jsonResponse(201, { success: true, data: { id: pathSegments.at(-1) } });
+      });
+    }
+
+    if (method === 'POST' && path === '/api/upsert') {
+      return handleGenericCrud(request, async () => {
+        const body = request.body as {
+          collection?: string;
+          id?: string;
+          path?: string[];
+          data?: Record<string, unknown>;
+        };
+
+        const pathSegments = parsePathBody(body);
+
+        if (!pathSegments || !body?.data) {
+          return jsonResponse(400, {
+            success: false,
+            message: 'collection/id o path, y data, son obligatorios.',
+          });
+        }
+
+        assertPathAllowed(pathSegments);
+        await firestoreRepository.upsertDocumentByPath(pathSegments, body.data);
+        return jsonResponse(200, { success: true, data: { id: pathSegments.at(-1) } });
+      });
+    }
+
     if (method === 'POST' && path === '/api/update') {
       return handleGenericCrud(request, async () => {
         const body = request.body as {
@@ -315,8 +367,23 @@ export async function routeHttpRequest(request: HttpRequest): Promise<HttpRespon
 
     return jsonResponse(404, { success: false, message: 'Ruta no encontrada.' });
   } catch (error) {
-    if (error instanceof AuthorizationError || error instanceof CollectionNotAllowedError) {
-      return jsonResponse(error.status, { success: false, message: error.message });
+    if (
+      error instanceof AuthorizationError ||
+      error instanceof CollectionNotAllowedError ||
+      error instanceof DocumentAlreadyExistsError ||
+      error instanceof DocumentNotFoundForUpdateError
+    ) {
+      const code =
+        error instanceof DocumentAlreadyExistsError ||
+        error instanceof DocumentNotFoundForUpdateError
+          ? error.code
+          : undefined;
+
+      return jsonResponse(error.status, {
+        success: false,
+        message: error.message,
+        code,
+      });
     }
 
     const message = error instanceof Error ? error.message : 'Error interno del servidor.';
