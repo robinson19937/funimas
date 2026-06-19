@@ -205,7 +205,7 @@ funimas deploy ./mi-proyecto_funimas --dry-run --prod
 | `--import-env` | Importa variables desde `.env` a Netlify (`netlify env:import`) |
 | `--check` | Valida workspace y `.env` sin desplegar |
 | `--dry-run` | Muestra los comandos sin ejecutarlos |
-| `--skip-firestore` | Omite `firebase deploy --only firestore:rules` |
+| `--skip-firestore` | Omite el deploy de reglas Firebase |
 | `--skip-netlify` | Omite `netlify deploy` |
 
 ---
@@ -224,7 +224,7 @@ flowchart TD
     H -->|Sí| I[funimas deploy --import-env --prod]
     H -->|No| J[Corregir .env / config]
     J --> G
-    I --> K[Firestore rules + Netlify site]
+    I --> K[Firebase rules + Netlify site]
 ```
 
 ### Paso a paso detallado
@@ -282,6 +282,8 @@ npx firebase-tools@latest deploy --only firestore:rules --project <FIREBASE_PROJ
 npx netlify-cli@latest env:import .env
 npx netlify-cli@latest deploy --prod
 ```
+
+Si existe `storage.rules`, Funimas añade automáticamente el target `storage` (`--only firestore:rules,storage`).
 
 ---
 
@@ -355,9 +357,9 @@ También procesa **scripts `<script type="module">` inline en HTML**, los reescr
 | `onSnapshot(doc(...))` | `Funimas.database.poll(collection, id, callback)` |
 | `onSnapshot(collection(...))` | `Funimas.database.pollCollection(collection, callback)` |
 
-### Firebase Auth — sin cambios
+### Firebase Auth — configuración automática
 
-Login, registro y `getIdToken()` **siguen en el cliente**. El SDK envía el token como `Authorization: Bearer <token>` al backend.
+Login y registro **siguen en el cliente**. Si Funimas detecta `getAuth(app)`, configura el SDK generado junto a esa inicialización para que cada llamada `/api` envíe `Authorization: Bearer <Firebase ID Token>`.
 
 ### Aún sin transformación automática
 
@@ -420,7 +422,7 @@ funimas deploy ./mi-proyecto_funimas --import-env --prod
 | ------ | ------------- |
 | Generar `netlify.toml`, reglas, functions, SDK | `funimas protect` |
 | Validar workspace y `.env` | `funimas deploy --check` |
-| Desplegar reglas Firestore | `funimas deploy` |
+| Desplegar reglas Firebase (`firestore.rules` y `storage.rules` si existe) | `funimas deploy` |
 | Importar env a Netlify | `funimas deploy --import-env` |
 | Desplegar sitio + functions | `funimas deploy --prod` |
 
@@ -502,21 +504,23 @@ En apps **sin bundler** (imports ES modules directos en el navegador), Funimas g
 
 ### 2. Conectar Firebase Auth al SDK
 
-El SDK requiere el token del usuario autenticado. Crea un bootstrap (por ejemplo en `js/funimas.js`):
+Funimas lo hace automáticamente cuando encuentra `getAuth(app)`:
 
 ```javascript
-import { configureFunimas } from '/sdk/index.js';
-import { auth } from './firebase.js';
+import { configureFunimas } from '../sdk/index.js';
 
-export const Funimas = configureFunimas({
-  getIdToken: () => auth.currentUser?.getIdToken() ?? Promise.resolve(null),
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+configureFunimas({
+  getIdToken: async () => auth.currentUser?.getIdToken() ?? null,
 });
 ```
 
-Y en el resto de módulos importa desde ahí:
+Y en el resto de módulos usa el SDK generado:
 
 ```javascript
-import { Funimas } from '../js/funimas.js';
+import { Funimas } from '../sdk/index.js';
 ```
 
 En proyectos **Vite / React / Next**, el bundler resuelve `@funimas/sdk` automáticamente vía `tsconfig` paths.

@@ -64,6 +64,7 @@ describe('Firestore CRUD rewrite rules', () => {
         'src/services/firestore-service.ts',
       );
       const content = await readFile(servicePath, 'utf8');
+      const firebaseContent = await readFile(join(tempProjectPath, 'src/firebase.ts'), 'utf8');
 
       expect(content).toContain('Funimas.database.insert');
       expect(content).toContain('Funimas.database.set');
@@ -71,6 +72,11 @@ describe('Firestore CRUD rewrite rules', () => {
       expect(content).toContain('Funimas.database.delete');
       expect(content).toContain('Funimas.database.get');
       expect(content).toContain('Funimas.database.list');
+      expect(firebaseContent).toContain('configureFunimas');
+      expect(firebaseContent).toContain('from "../sdk/index.js"');
+      expect(firebaseContent).toContain(
+        'getIdToken: async () => auth.currentUser?.getIdToken() ?? null',
+      );
       expect(countFunimasCalls(servicePath, 'get')).toBe(1);
       expect(countFunimasCalls(servicePath, 'list')).toBe(1);
     } finally {

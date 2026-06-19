@@ -30,7 +30,7 @@ describe('plain JS project protect', () => {
     );
     await writeFile(
       join(projectDir, 'firebase.js'),
-      "import { initializeApp } from 'firebase/app';\nimport { getFirestore } from 'firebase/firestore';\n\nconst app = initializeApp({ projectId: 'demo' });\nexport const db = getFirestore(app);\n",
+      "import { initializeApp } from 'firebase/app';\nimport { getAuth } from 'firebase/auth';\nimport { getFirestore } from 'firebase/firestore';\n\nconst app = initializeApp({ projectId: 'demo' });\nexport const auth = getAuth(app);\nexport const db = getFirestore(app);\n",
       'utf8',
     );
     await writeFile(
@@ -53,9 +53,15 @@ describe('plain JS project protect', () => {
 
     const workspacePath = result.workspaceResult.workspaceProject;
     const rewritten = await readFile(join(workspacePath, 'document-review.js'), 'utf8');
+    const firebaseConfig = await readFile(join(workspacePath, 'firebase.js'), 'utf8');
 
     expect(rewritten).toContain('Funimas.database.insert');
     expect(rewritten).toContain('from "./sdk/index.js"');
+    expect(firebaseConfig).toContain('configureFunimas');
+    expect(firebaseConfig).toContain('from "./sdk/index.js"');
+    expect(firebaseConfig).toContain(
+      'getIdToken: async () => auth.currentUser?.getIdToken() ?? null',
+    );
 
     await expect(stat(join(workspacePath, 'tsconfig.json'))).resolves.toBeDefined();
     await expect(stat(join(workspacePath, 'types/netlify.d.ts'))).resolves.toBeDefined();

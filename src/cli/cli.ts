@@ -175,7 +175,7 @@ export class CliApp {
     console.log('  setup                        Verifica prerequisitos (Node, Git, Firebase, Netlify)');
     console.log('  status [ruta]                Reporta APIs Firestore listas vs pendientes');
     console.log('  protect <ruta-del-proyecto>    Protege un proyecto y genera el workspace');
-    console.log('  deploy [workspace] [opciones]  Despliega reglas Firestore y sitio Netlify');
+    console.log('  deploy [workspace] [opciones]  Despliega reglas Firebase y sitio Netlify');
     console.log();
     console.log('Opciones de protect:');
     console.log('  --force             Sobrescribe el workspace _funimas si ya existe');
@@ -183,7 +183,7 @@ export class CliApp {
     console.log('Opciones de deploy:');
     console.log('  --prod              Despliegue a producción en Netlify');
     console.log('  --import-env        Importa variables desde .env a Netlify');
-    console.log('  --skip-firestore    Omite firebase deploy --only firestore:rules');
+    console.log('  --skip-firestore    Omite deploy de reglas Firebase');
     console.log('  --skip-netlify      Omite netlify deploy');
     console.log('  --dry-run           Muestra comandos sin ejecutarlos');
     console.log('  --check             Valida workspace y .env sin desplegar');
