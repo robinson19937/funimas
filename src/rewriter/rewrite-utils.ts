@@ -1,6 +1,8 @@
 import type { CallExpression, SourceFile } from 'ts-morph';
 import { SyntaxKind } from 'ts-morph';
 
+import { resolveCallExpression } from './firestore-rewrite-utils.js';
+
 export function findCallExpressionAt(
   sourceFile: SourceFile,
   line: number,
@@ -15,12 +17,12 @@ export function findCallExpressionAt(
 
 export function extractCollectionName(callExpression: CallExpression): string | undefined {
   const collectionArgument = callExpression.getArguments()[0];
+  const collectionCall = collectionArgument ? resolveCallExpression(collectionArgument) : undefined;
 
-  if (!collectionArgument || collectionArgument.getKind() !== SyntaxKind.CallExpression) {
+  if (!collectionCall) {
     return undefined;
   }
 
-  const collectionCall = collectionArgument.asKindOrThrow(SyntaxKind.CallExpression);
   const callee = collectionCall.getExpression();
 
   if (callee.getKind() !== SyntaxKind.Identifier || callee.getText() !== 'collection') {

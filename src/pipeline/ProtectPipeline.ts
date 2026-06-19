@@ -765,6 +765,7 @@ export class ProtectPipeline {
         projectPath: this.projectPath,
         workspacePath,
         history,
+        collections: deployConfig.firestoreCollections,
       }),
     );
 

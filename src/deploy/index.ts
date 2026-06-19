@@ -3,6 +3,16 @@ import { access, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
+export {
+  DeployReadinessChecker,
+  parseEnvFile,
+  validateEnvValues,
+  type DeployReadinessCheck,
+  type DeployReadinessReport,
+  type EnvValidationIssue,
+  type EnvValidationResult,
+} from './deploy-readiness-checker.js';
+
 const execFileAsync = promisify(execFile);
 
 export interface PrerequisiteCheck {

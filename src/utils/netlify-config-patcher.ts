@@ -42,18 +42,18 @@ export function patchNetlifyToml(content: string): NetlifyConfigPatchResult {
   };
 }
 
-function hasFunctionsDir(content: string): boolean {
+export function hasFunctionsDir(content: string): boolean {
   return /functions\s*=\s*["']netlify\/functions["']/m.test(content);
 }
 
-function hasApiRedirect(content: string): boolean {
+export function hasApiRedirect(content: string): boolean {
   return (
     content.includes(API_REDIRECT_FROM) &&
     content.includes('/.netlify/functions/funimas')
   );
 }
 
-function hasFunctionsBundlerConfig(content: string): boolean {
+export function hasFunctionsBundlerConfig(content: string): boolean {
   return (
     /\[functions\]/m.test(content) &&
     /node_bundler\s*=\s*["']esbuild["']/m.test(content) &&

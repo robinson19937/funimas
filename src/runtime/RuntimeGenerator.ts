@@ -75,7 +75,8 @@ export class RuntimeGenerator implements RuntimeGeneratorService {
     const generatedFiles: RuntimeResult['generatedFiles'] = [];
 
     for (const definition of this.fileDefinitions) {
-      const content = await this.templateEngine.render(definition.templatePath);
+      const templateData = this.getTemplateData(definition.templatePath, context);
+      const content = await this.templateEngine.render(definition.templatePath, templateData);
       const absolutePath = resolve(workspaceRoot, definition.outputPath);
 
       if (!absolutePath.startsWith(workspaceRoot)) {
@@ -131,5 +132,16 @@ export class RuntimeGenerator implements RuntimeGeneratorService {
       startedAt,
       finishedAt,
     });
+  }
+
+  private getTemplateData(
+    templatePath: string,
+    context: RuntimeContext,
+  ): Record<string, unknown> {
+    if (templatePath === 'runtime/router.hbs') {
+      return { collections: context.collections };
+    }
+
+    return {};
   }
 }

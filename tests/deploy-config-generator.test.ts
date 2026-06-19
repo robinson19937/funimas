@@ -42,6 +42,7 @@ describe('DeployConfigGenerator', () => {
     expect(result.filesWritten).toContain('firestore.rules');
     expect(result.filesWritten).toContain('firebase.json');
     expect(result.filesWritten).toContain('.env.example');
+    expect(result.filesWritten).toContain('funimas.config.json');
     expect(result.netlifyTomlPatched).toBe(true);
 
     const netlifyToml = await readFile(join(workspacePath, 'netlify.toml'), 'utf8');
@@ -49,5 +50,10 @@ describe('DeployConfigGenerator', () => {
 
     const firebaseJson = JSON.parse(await readFile(join(workspacePath, 'firebase.json'), 'utf8'));
     expect(firebaseJson.firestore.rules).toBe('firestore.rules');
+
+    const funimasConfig = JSON.parse(
+      await readFile(join(workspacePath, 'funimas.config.json'), 'utf8'),
+    );
+    expect(funimasConfig.allowedCollections).toEqual(['clubs']);
   });
 });

@@ -1,7 +1,7 @@
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-import { DeployService } from '../../deploy/index.js';
+import { DeployReadinessChecker, DeployService } from '../../deploy/index.js';
 import type { OutputWriter } from '../../utils/index.js';
 import { ConsoleOutputWriter } from '../../utils/index.js';
 import { resolveWorkspacePath } from '../../utils/workspace-path.js';
@@ -13,8 +13,10 @@ export interface DeployCommandOptions {
   skipNetlify?: boolean;
   dryRun?: boolean;
   importEnv?: boolean;
+  check?: boolean;
   output?: OutputWriter;
   deployService?: DeployService;
+  readinessChecker?: DeployReadinessChecker;
 }
 
 /**
@@ -24,11 +26,13 @@ export class DeployCommand {
   private readonly options: DeployCommandOptions;
   private readonly output: OutputWriter;
   private readonly deployService: DeployService;
+  private readonly readinessChecker: DeployReadinessChecker;
 
   constructor(options: DeployCommandOptions) {
     this.options = options;
     this.output = options.output ?? new ConsoleOutputWriter();
     this.deployService = options.deployService ?? new DeployService();
+    this.readinessChecker = options.readinessChecker ?? new DeployReadinessChecker();
   }
 
   async execute(): Promise<number> {
@@ -41,6 +45,10 @@ export class DeployCommand {
       this.output.writeln();
       this.output.writeln('Ejecuta primero: funimas protect <ruta-del-proyecto>');
       return 1;
+    }
+
+    if (this.options.check) {
+      return this.executeCheck(workspacePath);
     }
 
     this.output.writeln('Funimas — Despliegue');
@@ -81,6 +89,33 @@ export class DeployCommand {
     }
 
     this.output.writeln('Despliegue fallido. Revisa los errores anteriores.');
+    return 1;
+  }
+
+  private async executeCheck(workspacePath: string): Promise<number> {
+    this.output.writeln('Funimas — Verificación pre-deploy');
+    this.output.writeln();
+    this.output.writeln(`Workspace: ${workspacePath}`);
+    this.output.writeln();
+
+    const report = await this.readinessChecker.check(workspacePath);
+
+    for (const check of report.checks) {
+      const icon = check.passed ? '✔' : check.level === 'error' ? '✗' : '⚠';
+      this.output.writeln(`${icon} ${check.name}: ${check.message}`);
+      this.output.writeln();
+    }
+
+    if (report.ready) {
+      this.output.writeln('Workspace listo para desplegar.');
+      this.output.writeln();
+      this.output.writeln('Siguiente paso:');
+      this.output.writeln(`  funimas deploy ${workspacePath} --import-env --prod`);
+      this.output.writeln();
+      return 0;
+    }
+
+    this.output.writeln('El workspace no está listo. Corrige los errores antes de desplegar.');
     return 1;
   }
 }

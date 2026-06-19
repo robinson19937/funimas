@@ -11,4 +11,13 @@ export {
 export type { RewriteRule } from './RewriteRule.js';
 export type { RewriteApplication } from './RewriteApplication.js';
 export { DatabaseInsertRewriteRule } from './rules/DatabaseInsertRewriteRule.js';
+export { DatabaseSetRewriteRule } from './rules/DatabaseSetRewriteRule.js';
+export { DatabaseUpdateRewriteRule } from './rules/DatabaseUpdateRewriteRule.js';
+export { DatabaseDeleteRewriteRule } from './rules/DatabaseDeleteRewriteRule.js';
+export { DatabaseReadRewriteRule } from './rules/DatabaseReadRewriteRule.js';
 export { extractCollectionName, findCallExpressionAt } from './rewrite-utils.js';
+export {
+  extractCollectionArgument,
+  extractDocParts,
+  extractDocReference,
+} from './firestore-rewrite-utils.js';

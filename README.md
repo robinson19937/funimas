@@ -80,6 +80,15 @@ funimas deploy . --import-env --prod
 | `--skip-firestore` | Omite `firebase deploy --only firestore:rules` |
 | `--skip-netlify` | Omite `netlify deploy` |
 | `--dry-run` | Muestra los comandos sin ejecutarlos |
+| `--check` | Valida workspace, `.env` y configuración sin desplegar |
+
+### Verificar antes de desplegar
+
+```bash
+funimas deploy <proyecto>_funimas --check
+```
+
+Comprueba que existan `firebase.json`, `firestore.rules`, `funimas.config.json`, `netlify.toml` y que `.env` tenga las credenciales del servidor.
 
 ---
 

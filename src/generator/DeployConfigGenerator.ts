@@ -57,6 +57,9 @@ export class DeployConfigGenerator {
     const envResult = await this.envExampleGenerator.generate(context);
     filesWritten.push(envResult.file.relativePath);
 
+    await this.writeFunimasConfig(context.workspacePath, firestoreResult.collections);
+    filesWritten.push('funimas.config.json');
+
     return {
       netlifyTomlPatched,
       netlifyTomlChanges,
@@ -88,5 +91,19 @@ export class DeployConfigGenerator {
       patched: patchResult.patched || existing.length === 0,
       changes: patchResult.changes,
     };
+  }
+
+  private async writeFunimasConfig(workspacePath: string, collections: string[]): Promise<void> {
+    const configPath = join(workspacePath, 'funimas.config.json');
+    const content = `${JSON.stringify(
+      {
+        version: 1,
+        allowedCollections: collections,
+      },
+      null,
+      2,
+    )}\n`;
+
+    await writeFile(configPath, content, 'utf8');
   }
 }
