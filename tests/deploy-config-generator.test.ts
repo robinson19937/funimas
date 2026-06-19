@@ -82,4 +82,38 @@ describe('DeployConfigGenerator', () => {
     );
     expect(funimasConfig.allowedCollections).toEqual(['clubs']);
   });
+
+  it('genera netlify.toml aunque no haya adaptador Netlify pero existan operaciones Firestore', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'funimas-deploy-config-no-netlify-'));
+    tempDirs.push(workspacePath);
+
+    const generator = new DeployConfigGenerator();
+    const context = new GeneratorContext({
+      projectPath: workspacePath,
+      workspacePath,
+      semanticResult: new SemanticResult({
+        operations: [
+          {
+            type: 'DATABASE_READ',
+            file: 'app.js',
+            line: 1,
+            column: 1,
+            metadata: { callee: 'getDoc' },
+          },
+        ],
+        providers: ['firebase'],
+      }),
+    });
+
+    const result = await generator.generate(context);
+
+    expect(result.filesWritten).toContain('netlify.toml');
+    expect(result.netlifyTomlChanges).toContain(
+      'redirect /api/* → /.netlify/functions/funimas/:splat',
+    );
+
+    const netlifyToml = await readFile(join(workspacePath, 'netlify.toml'), 'utf8');
+    expect(netlifyToml).toContain('from = "/api/*"');
+    expect(netlifyToml).toContain('to = "/.netlify/functions/funimas/:splat"');
+  });
 });
