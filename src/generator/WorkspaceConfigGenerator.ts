@@ -7,6 +7,7 @@ import type { GeneratorContext } from './GeneratorContext.js';
 import { renderFirebaseAdminTypes, renderNetlifyTypes } from './templates/workspace/netlify-types.js';
 
 const NETLIFY_FUNCTIONS_VERSION = '^2.8.2';
+const TYPESCRIPT_VERSION = '^5.8.3';
 
 const FUNIMAS_PATHS = {
   '@funimas/sdk': ['./sdk/index.ts'],
@@ -229,7 +230,22 @@ export class WorkspaceConfigGenerator {
       devDependencies['@types/node'] = '^24.0.3';
     }
 
+    if (!devDependencies.typescript) {
+      devDependencies.typescript = TYPESCRIPT_VERSION;
+    }
+
     packageJson.devDependencies = devDependencies;
+
+    const scripts =
+      typeof packageJson.scripts === 'object' && packageJson.scripts !== null
+        ? (packageJson.scripts as Record<string, string>)
+        : {};
+
+    if (!scripts.build) {
+      scripts.build = 'tsc --noEmit';
+    }
+
+    packageJson.scripts = scripts;
 
     await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
   }

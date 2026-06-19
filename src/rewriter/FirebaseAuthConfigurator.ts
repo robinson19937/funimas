@@ -2,7 +2,6 @@ import { dirname, join, relative } from 'node:path';
 
 import { Node, type Project, type SourceFile, type Statement, SyntaxKind } from 'ts-morph';
 
-const FIREBASE_AUTH_MODULE = 'firebase/auth';
 const CONFIGURE_FUNIMAS_IMPORT = 'configureFunimas';
 
 export interface FirebaseAuthConfigurationResult {
@@ -102,7 +101,7 @@ export class FirebaseAuthConfigurator {
     const localNames: string[] = [];
 
     for (const declaration of sourceFile.getImportDeclarations()) {
-      if (declaration.getModuleSpecifierValue() !== FIREBASE_AUTH_MODULE) {
+      if (!this.isFirebaseAuthModule(declaration.getModuleSpecifierValue())) {
         continue;
       }
 
@@ -116,6 +115,10 @@ export class FirebaseAuthConfigurator {
     }
 
     return localNames;
+  }
+
+  private isFirebaseAuthModule(moduleSpecifier: string): boolean {
+    return moduleSpecifier === 'firebase/auth' || moduleSpecifier.includes('firebase-auth');
   }
 
   private hasConfigureFunimasCall(sourceFile: SourceFile): boolean {

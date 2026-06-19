@@ -75,9 +75,40 @@ describe('WorkspaceConfigGenerator', () => {
 
     const packageJson = JSON.parse(await readFile(join(workspacePath, 'package.json'), 'utf8'));
     expect(packageJson.dependencies['@netlify/functions']).toBe('^2.8.2');
+    expect(packageJson.devDependencies.typescript).toBe('^5.8.3');
+    expect(packageJson.scripts.build).toBe('tsc --noEmit');
 
     const netlifyTypes = await readFile(join(workspacePath, result.typesRelativePath), 'utf8');
     expect(netlifyTypes).toContain("declare module '@netlify/functions'");
+  });
+
+  it('agrega build y TypeScript sin borrar scripts existentes', async () => {
+    const workspacePath = await createPlainJsWorkspace();
+    await writeFile(
+      join(workspacePath, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'existing-project',
+          scripts: {
+            test: 'node --test',
+          },
+          devDependencies: {
+            mocha: '^10.2.0',
+          },
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
+
+    await new WorkspaceConfigGenerator().generate(createGeneratorContext(workspacePath));
+
+    const packageJson = JSON.parse(await readFile(join(workspacePath, 'package.json'), 'utf8'));
+    expect(packageJson.scripts.test).toBe('node --test');
+    expect(packageJson.scripts.build).toBe('tsc --noEmit');
+    expect(packageJson.devDependencies.mocha).toBe('^10.2.0');
+    expect(packageJson.devDependencies.typescript).toBe('^5.8.3');
   });
 
   it('usa src/types cuando el proyecto ya tiene carpeta src', async () => {
