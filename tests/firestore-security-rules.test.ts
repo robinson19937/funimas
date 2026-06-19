@@ -7,7 +7,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { beforeAll, beforeEach, afterAll, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, afterAll, describe, it } from 'vitest';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
 
 const describeWithFirestore =
@@ -190,16 +190,14 @@ describeWithFirestore('firestore.rules multiempresa', () => {
       }),
     );
 
-    await expect(
-      assertFails(
-        setDoc(doc(db, 'users', 'bob'), {
-          uid: 'bob',
-          email: 'bob@example.com',
-          companyId: 'acme',
-          createdAt: '2026-06-19T00:00:00.000Z',
-          updatedAt: '2026-06-19T00:00:00.000Z',
-        }),
-      ),
-    ).resolves.toBeUndefined();
+    await assertFails(
+      setDoc(doc(db, 'users', 'bob'), {
+        uid: 'bob',
+        email: 'bob@example.com',
+        companyId: 'acme',
+        createdAt: '2026-06-19T00:00:00.000Z',
+        updatedAt: '2026-06-19T00:00:00.000Z',
+      }),
+    );
   });
 });
