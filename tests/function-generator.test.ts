@@ -76,7 +76,7 @@ describe('SDKGenerator', () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
-  it('genera sdk/index.ts y sdk/database/DatabaseClient.ts', async () => {
+  it('genera sdk/index.ts, sdk/index.js y sdk/database/DatabaseClient.ts', async () => {
     const workspacePath = await mkdtemp(join(tmpdir(), 'funimas-sdk-'));
     tempDirs.push(workspacePath);
     const generator = new SDKGenerator();
@@ -92,9 +92,11 @@ describe('SDKGenerator', () => {
     expect(result.files.map((file) => file.relativePath)).toEqual([
       'sdk/index.ts',
       'sdk/database/DatabaseClient.ts',
+      'sdk/index.js',
     ]);
 
     const sdkIndex = await readFile(join(workspacePath, 'sdk/index.ts'), 'utf8');
+    const browserSdk = await readFile(join(workspacePath, 'sdk/index.js'), 'utf8');
     const databaseClient = await readFile(
       join(workspacePath, 'sdk/database/DatabaseClient.ts'),
       'utf8',
@@ -102,8 +104,12 @@ describe('SDKGenerator', () => {
 
     expect(sdkIndex).toContain("from './database/DatabaseClient.js'");
     expect(sdkIndex).toContain('export const Funimas');
+    expect(sdkIndex).toContain('Object.assign(Funimas, configured)');
+    expect(browserSdk).toContain('export class DatabaseClient');
+    expect(browserSdk).toContain('__funimasFirestoreSentinel');
     expect(databaseClient).toContain('export class DatabaseClient');
     expect(databaseClient).toContain('insert(');
+    expect(databaseClient).toContain('createQuerySnapshot');
   });
 });
 
@@ -252,7 +258,7 @@ describe('ProjectCodeGenerator', () => {
     expect(result.runtimeGenerated).toBe(true);
     expect(result.sdkGenerated).toBe(true);
     expect(result.functionFileNames).toEqual(['database_insert.ts']);
-    expect(result.totalFiles).toBe(4);
+    expect(result.totalFiles).toBe(5);
   });
 });
 

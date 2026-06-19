@@ -107,7 +107,7 @@ export class CodeRewriter implements CodeRewriterService {
       const fileImportsAdded: string[] = [];
       const fileImportsRemoved: string[] = [];
 
-      if (this.importManager.ensureFunimasImport(sourceFile)) {
+      if (this.importManager.ensureFunimasImport(sourceFile, context.workspacePath)) {
         fileImportsAdded.push('@funimas/sdk:Funimas');
         importsAdded.push('@funimas/sdk:Funimas');
       }

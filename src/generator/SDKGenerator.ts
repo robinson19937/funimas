@@ -4,7 +4,7 @@ import type { GeneratorContext } from './GeneratorContext.js';
 import { GeneratorResult } from './GeneratorResult.js';
 import { GeneratorFileWriter } from './GeneratorFileWriter.js';
 import { renderDatabaseClient } from './templates/sdk/database/DatabaseClient.js';
-import { renderSdkIndex } from './templates/sdk/index.js';
+import { renderSdkBrowserIndex, renderSdkIndex } from './templates/sdk/index.js';
 
 export interface SDKGeneratorOptions {
   fileWriter?: GeneratorFileWriter;
@@ -39,6 +39,11 @@ export class SDKGenerator implements SDKGeneratorService {
         fileName: 'DatabaseClient.ts',
         relativePath: 'sdk/database/DatabaseClient.ts',
         content: renderDatabaseClient(),
+      },
+      {
+        fileName: 'index.js',
+        relativePath: 'sdk/index.js',
+        content: renderSdkBrowserIndex(),
       },
     ];
     const written = await this.fileWriter.writeFiles(context.workspacePath, files);

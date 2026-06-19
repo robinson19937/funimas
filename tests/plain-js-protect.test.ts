@@ -55,13 +55,14 @@ describe('plain JS project protect', () => {
     const rewritten = await readFile(join(workspacePath, 'document-review.js'), 'utf8');
 
     expect(rewritten).toContain('Funimas.database.insert');
-    expect(rewritten).toContain("@funimas/sdk");
+    expect(rewritten).toContain('from "./sdk/index.js"');
 
     await expect(stat(join(workspacePath, 'tsconfig.json'))).resolves.toBeDefined();
     await expect(stat(join(workspacePath, 'types/netlify.d.ts'))).resolves.toBeDefined();
     await expect(stat(join(workspacePath, 'package.json'))).resolves.toBeDefined();
     await expect(stat(join(workspacePath, 'netlify/functions/database_insert.ts'))).resolves.toBeDefined();
     await expect(stat(join(workspacePath, 'sdk/index.ts'))).resolves.toBeDefined();
+    await expect(stat(join(workspacePath, 'sdk/index.js'))).resolves.toBeDefined();
     await expect(stat(join(workspacePath, 'runtime/handler.ts'))).resolves.toBeDefined();
   });
 });

@@ -63,6 +63,9 @@ describe('MVP funimas protect', () => {
       stat(join(result.workspaceResult.workspaceProject, 'sdk/index.ts')),
     ).resolves.toBeDefined();
     await expect(
+      stat(join(result.workspaceResult.workspaceProject, 'sdk/index.js')),
+    ).resolves.toBeDefined();
+    await expect(
       stat(join(result.workspaceResult.workspaceProject, 'netlify/functions/database_insert.ts')),
     ).resolves.toBeDefined();
     await expect(

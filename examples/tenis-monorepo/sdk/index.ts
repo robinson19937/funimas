@@ -1,6 +1,13 @@
 import { DatabaseClient } from './database/DatabaseClient.js';
 
-export type { DatabaseClientOptions, GetIdToken, ApiError } from './database/DatabaseClient.js';
+export type {
+  DatabaseClientOptions,
+  DocumentReferenceLike,
+  DocumentSnapshotLike,
+  GetIdToken,
+  QueryDocumentSnapshotLike,
+  QuerySnapshotLike,
+} from './database/DatabaseClient.js';
 export { DatabaseClient, ApiError } from './database/DatabaseClient.js';
 
 export type AuthHelpers = {
@@ -19,12 +26,16 @@ export function createFunimas(auth: AuthHelpers, baseUrl = '/api') {
   };
 }
 
+export type FunimasClient = ReturnType<typeof createFunimas>;
+
 const defaultAuth: AuthHelpers = {
   getIdToken: async () => null,
 };
 
-export const Funimas = createFunimas(defaultAuth);
+export const Funimas: FunimasClient = createFunimas(defaultAuth);
 
 export function configureFunimas(auth: AuthHelpers, baseUrl?: string) {
-  return createFunimas(auth, baseUrl ?? '/api');
+  const configured = createFunimas(auth, baseUrl ?? '/api');
+  Object.assign(Funimas, configured);
+  return Funimas;
 }
