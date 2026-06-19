@@ -73,7 +73,7 @@ function ensureBuildFunctionsDir(content: string): string {
     );
   }
 
-  return `[build]\n  functions = "${FUNCTIONS_DIR}"\n\n${content}`;
+  return `[build]\n  functions = "${FUNCTIONS_DIR}"\n  publish = "."\n\n${content}`;
 }
 
 function appendApiRedirect(content: string): string {

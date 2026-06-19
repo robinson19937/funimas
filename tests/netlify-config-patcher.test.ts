@@ -40,5 +40,6 @@ describe('patchNetlifyToml', () => {
     expect(result.patched).toBe(true);
     expect(result.content).toContain('[build]');
     expect(result.content).toContain('functions = "netlify/functions"');
+    expect(result.content).toContain('publish = "."');
   });
 });

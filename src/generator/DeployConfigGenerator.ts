@@ -38,7 +38,7 @@ export class DeployConfigGenerator {
     let netlifyTomlPatched = false;
     let netlifyTomlChanges: string[] = [];
 
-    if (adapter?.id === 'netlify') {
+    if (this.shouldConfigureNetlify(context, adapter)) {
       const netlifyResult = await this.patchNetlifyConfig(context.workspacePath);
       netlifyTomlPatched = netlifyResult.patched;
       netlifyTomlChanges = netlifyResult.changes;
@@ -66,6 +66,18 @@ export class DeployConfigGenerator {
       firestoreCollections: firestoreResult.collections,
       filesWritten,
     };
+  }
+
+  private shouldConfigureNetlify(context: GeneratorContext, adapter?: PlatformAdapter): boolean {
+    if (adapter?.id === 'netlify') {
+      return true;
+    }
+
+    return context.semanticResult.operations.some((operation) =>
+      ['DATABASE_READ', 'DATABASE_INSERT', 'DATABASE_UPDATE', 'DATABASE_DELETE'].includes(
+        operation.type,
+      ),
+    );
   }
 
   private async patchNetlifyConfig(workspacePath: string): Promise<{
