@@ -32,6 +32,24 @@ describe('DeployConfigGenerator', () => {
       'rules_version = "2";\nservice firebase.storage { match /b/{bucket}/o { match /{allPaths=**} { allow read, write: if false; } } }\n',
       'utf8',
     );
+    await writeFile(
+      join(workspacePath, 'firebase.json'),
+      JSON.stringify(
+        {
+          hosting: {
+            public: '.',
+          },
+          emulators: {
+            firestore: {
+              port: 8280,
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
 
     const generator = new DeployConfigGenerator();
     const context = new GeneratorContext({
@@ -56,6 +74,8 @@ describe('DeployConfigGenerator', () => {
     const firebaseJson = JSON.parse(await readFile(join(workspacePath, 'firebase.json'), 'utf8'));
     expect(firebaseJson.firestore.rules).toBe('firestore.rules');
     expect(firebaseJson.storage.rules).toBe('storage.rules');
+    expect(firebaseJson.hosting.public).toBe('.');
+    expect(firebaseJson.emulators.firestore.port).toBe(8280);
 
     const funimasConfig = JSON.parse(
       await readFile(join(workspacePath, 'funimas.config.json'), 'utf8'),
