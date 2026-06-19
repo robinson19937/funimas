@@ -40,7 +40,9 @@ describe('RuntimeGenerator', () => {
     expect(result.generatedFiles.map((file) => file.fileName)).toEqual([
       'handler.ts',
       'router.ts',
-      'databaseController.ts',
+      'clubsController.ts',
+      'authMiddleware.ts',
+      'authorization.ts',
       'firestoreRepository.ts',
       'Request.ts',
       'Response.ts',

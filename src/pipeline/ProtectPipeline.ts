@@ -24,11 +24,12 @@ import {
   type SDKGeneratorService,
 } from '../generator/index.js';
 import { DatabaseInsertFunctionGenerator } from '../generator/functions/DatabaseInsertFunctionGenerator.js';
+import { FunimasFunctionGenerator } from '../generator/functions/FunimasFunctionGenerator.js';
 import { TransformationHistory } from '../history/index.js';
 import { ChangeReportGenerator, ValidationReportGenerator } from '../report/index.js';
 import { TransformationBenefit } from '../report/TransformationBenefit.js';
 import { TransformationReason } from '../report/TransformationReason.js';
-import { RuntimeGenerator, RuntimeContext, type RuntimeGeneratorService } from '../runtime/index.js';
+import { RuntimeGenerator, RuntimeContext, SharedGenerator, type RuntimeGeneratorService, type SharedGeneratorService } from '../runtime/index.js';
 import { CodeRewriter, RewriteContext, type CodeRewriterService } from '../rewriter/index.js';
 import type { RewriteResult } from '../rewriter/RewriteResult.js';
 import { TransformationPlanner, type TransformationPlannerService } from '../planner/index.js';
@@ -71,6 +72,8 @@ export interface ProtectPipelineOptions {
   validationEngine?: ValidationEngineService;
   rollbackManager?: RollbackManagerService;
   databaseInsertFunctionGenerator?: DatabaseInsertFunctionGenerator;
+  funimasFunctionGenerator?: FunimasFunctionGenerator;
+  sharedGenerator?: SharedGeneratorService;
   generatedFileVerifier?: GeneratedFileVerifier;
   workspaceConfigGenerator?: WorkspaceConfigGenerator;
 }
@@ -95,6 +98,8 @@ export class ProtectPipeline {
   private readonly validationEngine: ValidationEngineService;
   private readonly rollbackManager: RollbackManagerService;
   private readonly databaseInsertFunctionGenerator: DatabaseInsertFunctionGenerator;
+  private readonly funimasFunctionGenerator: FunimasFunctionGenerator;
+  private readonly sharedGenerator: SharedGeneratorService;
   private readonly generatedFileVerifier: GeneratedFileVerifier;
   private readonly workspaceConfigGenerator: WorkspaceConfigGenerator;
   private readonly executionId: string;
@@ -122,6 +127,9 @@ export class ProtectPipeline {
     this.rollbackManager = options.rollbackManager ?? new RollbackManager();
     this.databaseInsertFunctionGenerator =
       options.databaseInsertFunctionGenerator ?? new DatabaseInsertFunctionGenerator();
+    this.funimasFunctionGenerator =
+      options.funimasFunctionGenerator ?? new FunimasFunctionGenerator();
+    this.sharedGenerator = options.sharedGenerator ?? new SharedGenerator();
     this.generatedFileVerifier = options.generatedFileVerifier ?? new GeneratedFileVerifier();
     this.workspaceConfigGenerator =
       options.workspaceConfigGenerator ?? new WorkspaceConfigGenerator();
@@ -625,6 +633,8 @@ export class ProtectPipeline {
     this.output.writeln();
     this.output.writeln('✔ RuntimeGenerator — siempre');
     this.output.writeln();
+    this.output.writeln('✔ SharedGenerator — siempre');
+    this.output.writeln();
     this.output.writeln('✔ SDKGenerator — siempre');
     this.output.writeln();
 
@@ -657,6 +667,63 @@ export class ProtectPipeline {
         workspacePath,
         history,
       });
+
+      this.output.writeln('Generando función funimas...');
+      this.output.writeln();
+
+      const funimasFunction = await this.funimasFunctionGenerator.generate(generatorContext);
+
+      await this.generatedFileVerifier.verifyWrittenFile(
+        workspacePath,
+        {
+          relativePath: funimasFunction.relativePath,
+          absolutePath: funimasFunction.absolutePath,
+          content: funimasFunction.content,
+        },
+        'FunimasFunctionGenerator',
+      );
+
+      await history.record({
+        file: funimasFunction.absolutePath,
+        operation: 'GENERATE_FUNCTION',
+        rewriteRule: 'FunimasFunctionGenerator',
+        before: '',
+        after: funimasFunction.content,
+        generatedFiles: [funimasFunction.relativePath],
+        modifiedImports: [],
+        status: 'COMPLETED',
+        reason: 'La función funimas expone el runtime HTTP con Firebase Admin SDK.',
+        benefit: 'El cliente deja de acceder a Firestore directamente.',
+        riskLevel: 'LOW',
+        generatedBy: 'FunimasFunctionGenerator',
+        templateUsed: 'templates/netlify/funimas.hbs',
+        compilerVersion: VERSION,
+      });
+
+      this.output.writeln('✔ funimas.ts');
+      this.output.writeln();
+    }
+
+    this.output.writeln('Generando shared...');
+    this.output.writeln();
+
+    const sharedResult = await this.sharedGenerator.generate(
+      new RuntimeContext({
+        projectPath: this.projectPath,
+        workspacePath,
+        history,
+      }),
+    );
+
+    await this.generatedFileVerifier.verifyPaths(
+      workspacePath,
+      sharedResult.generatedFiles.map((file) => file.relativePath),
+      'SharedGenerator',
+    );
+
+    for (const generatedFile of sharedResult.generatedFiles) {
+      this.output.writeln(`✔ ${generatedFile.fileName}`);
+      this.output.writeln();
     }
 
     this.output.writeln('Generando Runtime...');

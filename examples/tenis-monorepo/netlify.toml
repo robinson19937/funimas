@@ -1,0 +1,13 @@
+[build]
+  command = "npm run build --workspace=tenis"
+  publish = "tenis/dist"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/funimas/:splat"
+  status = 200
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["firebase-admin"]

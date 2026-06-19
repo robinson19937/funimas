@@ -7,6 +7,7 @@ import { MissingFilesRule } from './rules/MissingFilesRule.js';
 import { MissingImportsRule } from './rules/MissingImportsRule.js';
 import { RuntimeStructureRule } from './rules/RuntimeStructureRule.js';
 import { SDKStructureRule } from './rules/SDKStructureRule.js';
+import { SharedStructureRule } from './rules/SharedStructureRule.js';
 import { TypeScriptCompilationRule } from './rules/TypeScriptCompilationRule.js';
 
 export interface ValidationEngineOptions {
@@ -94,6 +95,7 @@ export function createDefaultValidationRegistry(): ValidationRegistry {
     new MissingFilesRule(),
     new GeneratedFilesRule(),
     new RuntimeStructureRule(),
+    new SharedStructureRule(),
     new SDKStructureRule(),
   ]);
 

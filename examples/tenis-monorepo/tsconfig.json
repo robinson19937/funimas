@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@funimas/sdk": ["./sdk/index.ts"],
+      "@funimas/shared": ["./shared/index.ts"]
+    }
+  },
+  "include": [
+    "runtime/**/*",
+    "sdk/**/*",
+    "shared/**/*",
+    "netlify/**/*",
+    "types/**/*",
+    "tenis/src/**/*"
+  ],
+  "exclude": ["node_modules", "tenis/dist"]
+}

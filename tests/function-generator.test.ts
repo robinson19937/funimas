@@ -145,8 +145,9 @@ describe('FunctionGenerator', () => {
     );
 
     expect(content).toContain('export const handler');
-    expect(content).toContain('statusCode: 200');
+    expect(content).toContain('statusCode: response.status');
     expect(content).toContain('createHandler');
+    expect(content).toContain('/api/insert');
   });
 });
 
@@ -306,7 +307,8 @@ describe('ProtectCommand integration', () => {
     expect(sdk).toContain('DatabaseClient');
     expect(databaseClient).toContain('class DatabaseClient');
     expect(netlifyFunction).toContain('createHandler');
-    expect(netlifyFunction).toContain('runtime.database.insert');
+    expect(netlifyFunction).toContain('runtime.handle');
+    expect(netlifyFunction).toContain('/api/insert');
     expect(untouchedService).toBe(originalService);
     await expect(stat(join(projectDir, 'runtime/handler.ts'))).rejects.toThrow();
   });
