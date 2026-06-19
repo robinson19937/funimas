@@ -7,6 +7,10 @@ import type { RewriteContext } from './RewriteContext.js';
 import { RewriteRegistry } from './RewriteRegistry.js';
 import { RewriteResult, createEmptyOperationsRewritten } from './RewriteResult.js';
 import { DatabaseInsertRewriteRule } from './rules/DatabaseInsertRewriteRule.js';
+import { DatabaseSetRewriteRule } from './rules/DatabaseSetRewriteRule.js';
+import { DatabaseUpdateRewriteRule } from './rules/DatabaseUpdateRewriteRule.js';
+import { DatabaseDeleteRewriteRule } from './rules/DatabaseDeleteRewriteRule.js';
+import { DatabaseReadRewriteRule } from './rules/DatabaseReadRewriteRule.js';
 import type { SemanticOperation } from '../semantic/SemanticOperation.js';
 
 interface PendingRewrite {
@@ -55,8 +59,19 @@ export class CodeRewriter implements CodeRewriterService {
     const importsAdded: string[] = [];
     const importsRemoved: string[] = [];
     const pendingRewrites: PendingRewrite[] = [];
+    const rewriteableOperations = [...context.getRewriteableOperations()].sort((left, right) => {
+      if (left.file !== right.file) {
+        return left.file.localeCompare(right.file);
+      }
 
-    for (const operation of context.getRewriteableOperations()) {
+      if (left.line !== right.line) {
+        return right.line - left.line;
+      }
+
+      return right.column - left.column;
+    });
+
+    for (const operation of rewriteableOperations) {
       const rule = this.registry.findRule(operation);
 
       if (!rule) {
@@ -144,6 +159,10 @@ export function createDefaultRewriteRegistry(): RewriteRegistry {
   const registry = new RewriteRegistry();
 
   registry.register(new DatabaseInsertRewriteRule());
+  registry.register(new DatabaseSetRewriteRule());
+  registry.register(new DatabaseUpdateRewriteRule());
+  registry.register(new DatabaseDeleteRewriteRule());
+  registry.register(new DatabaseReadRewriteRule());
 
   return registry;
 }

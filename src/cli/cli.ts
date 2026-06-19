@@ -13,6 +13,7 @@ interface ParsedFlags {
   skipNetlify: boolean;
   dryRun: boolean;
   importEnv: boolean;
+  check: boolean;
 }
 
 export class CliApp {
@@ -89,6 +90,7 @@ export class CliApp {
       skipNetlify: flags.skipNetlify,
       dryRun: flags.dryRun,
       importEnv: flags.importEnv,
+      check: flags.check,
     });
 
     return command.execute();
@@ -102,6 +104,7 @@ export class CliApp {
       skipNetlify: false,
       dryRun: false,
       importEnv: false,
+      check: false,
     };
 
     for (const arg of args) {
@@ -121,6 +124,9 @@ export class CliApp {
           break;
         case '--import-env':
           flags.importEnv = true;
+          break;
+        case '--check':
+          flags.check = true;
           break;
         default:
           if (!arg.startsWith('-')) {
@@ -147,5 +153,6 @@ export class CliApp {
     console.log('  --skip-firestore    Omite firebase deploy --only firestore:rules');
     console.log('  --skip-netlify      Omite netlify deploy');
     console.log('  --dry-run           Muestra comandos sin ejecutarlos');
+    console.log('  --check             Valida workspace y .env sin desplegar');
   }
 }

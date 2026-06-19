@@ -130,6 +130,26 @@ export class DatabaseClient {
   async insert(collection: string, data: unknown): Promise<void> {
     await this.request('POST', '/insert', { collection, data });
   }
+
+  async get(collection: string, id: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', '/read', { collection, id });
+  }
+
+  async list(collection: string): Promise<Record<string, unknown>[]> {
+    return this.request<Record<string, unknown>[]>('POST', '/list', { collection });
+  }
+
+  async set(collection: string, id: string, data: unknown): Promise<void> {
+    await this.request('POST', '/set', { collection, id, data });
+  }
+
+  async update(collection: string, id: string, data: unknown): Promise<void> {
+    await this.request('POST', '/update', { collection, id, data });
+  }
+
+  async delete(collection: string, id: string): Promise<void> {
+    await this.request('POST', '/delete', { collection, id });
+  }
 }
 `;
 }

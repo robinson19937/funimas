@@ -51,19 +51,28 @@ declare module 'firebase-admin/auth' {
 
 declare module 'firebase-admin/firestore' {
   export interface Firestore {}
+  export interface DocumentSnapshot {
+    id: string;
+    exists: boolean;
+    data(): Record<string, unknown> | undefined;
+  }
+  export interface QuerySnapshot {
+    docs: DocumentSnapshot[];
+  }
   export interface DocumentReference {
     id: string;
-    get(): Promise<{ exists: boolean; data(): Record<string, unknown> | undefined }>;
+    get(): Promise<DocumentSnapshot>;
     set(data: unknown): Promise<void>;
     delete(): Promise<void>;
     update(data: unknown): Promise<void>;
   }
   export interface Transaction {
-    get(ref: DocumentReference): Promise<{ exists: boolean; data(): Record<string, unknown> | undefined }>;
+    get(ref: DocumentReference): Promise<DocumentSnapshot>;
     set(ref: DocumentReference, data: unknown): void;
   }
   export interface CollectionReference {
     doc(id?: string): DocumentReference;
+    get(): Promise<QuerySnapshot>;
   }
   export function getFirestore(): Firestore;
   export interface Firestore {

@@ -57,4 +57,43 @@ export class FirestoreRepository {
     await ref.set(data);
     return { id: ref.id, ...data };
   }
+
+  async getDocument(collection: string, id: string): Promise<Record<string, unknown> | null> {
+    const snapshot = await getDb().collection(collection).doc(id).get();
+
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    return { id: snapshot.id, ...(snapshot.data() as Record<string, unknown>) };
+  }
+
+  async listDocuments(collection: string): Promise<Record<string, unknown>[]> {
+    const snapshot = await getDb().collection(collection).get();
+
+    return snapshot.docs.map((document: { id: string; data(): Record<string, unknown> | undefined }) => ({
+      id: document.id,
+      ...(document.data() as Record<string, unknown>),
+    }));
+  }
+
+  async setDocument(
+    collection: string,
+    id: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    await getDb().collection(collection).doc(id).set(data);
+  }
+
+  async updateDocument(
+    collection: string,
+    id: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    await getDb().collection(collection).doc(id).update(data);
+  }
+
+  async deleteDocument(collection: string, id: string): Promise<void> {
+    await getDb().collection(collection).doc(id).delete();
+  }
 }
