@@ -1,16 +1,107 @@
 # Funimas
 
-Herramienta de línea de comandos que protege proyectos con Firebase/Firestore. Analiza el código, crea una copia de trabajo segura y mueve el acceso a datos al servidor **sin tocar los archivos originales**.
+**Funimas** es una CLI que protege aplicaciones web con **Firebase/Firestore**. Analiza tu código, genera un workspace listo para producción y mueve el acceso a datos del navegador al servidor — **sin modificar tu proyecto original**.
 
-Funciona con **cualquier repositorio** que cumpla los requisitos de abajo (React, Vite, Next, etc.). No está limitado a un solo proyecto.
+```text
+Cliente (Auth en Firebase)  →  @funimas/sdk  →  Netlify Functions  →  Admin SDK  →  Firestore
+```
 
-## ¿Qué necesitas antes de empezar?
+---
 
-1. **Node.js** 20 o superior (`node --version`)
-2. **Git**
-3. Una **terminal**
+## Tabla de contenidos
 
-## Instalación (solo la primera vez)
+1. [¿Qué es Funimas?](#qué-es-funimas)
+2. [¿Por qué existe?](#por-qué-existe)
+3. [¿Para quién es?](#para-quién-es)
+4. [Requisitos](#requisitos)
+5. [Instalación](#instalación)
+6. [Inicio rápido](#inicio-rápido)
+7. [Comandos](#comandos)
+8. [Flujo completo: de protect a producción](#flujo-completo-de-protect-a-producción)
+9. [Qué genera y qué modifica](#qué-genera-y-qué-modifica)
+10. [APIs soportadas](#apis-soportadas)
+11. [Variables de entorno](#variables-de-entorno)
+12. [Despliegue](#despliegue)
+13. [Proyectos PWA / JavaScript plano](#proyectos-pwa--javascript-plano)
+14. [Ejemplos incluidos](#ejemplos-incluidos)
+15. [Desarrollo del repo Funimas](#desarrollo-del-repo-funimas)
+16. [Licencia](#licencia)
+
+---
+
+## ¿Qué es Funimas?
+
+Funimas es una herramienta de línea de comandos que:
+
+1. **Analiza** tu proyecto (TypeScript, JavaScript, scripts inline en HTML).
+2. **Detecta** operaciones de Firestore en el cliente.
+3. **Reescribe** el código hacia el SDK `@funimas/sdk`.
+4. **Genera** backend (Netlify Functions + runtime), reglas de Firestore y configuración de despliegue.
+5. **Valida** el workspace resultante (TypeScript, imports, estructura).
+6. **Opcionalmente despliega** reglas Firestore y el sitio en Netlify.
+
+Todo el trabajo ocurre en una copia de trabajo:
+
+```text
+mi-proyecto/           ← no se modifica (solo backup + reportes)
+mi-proyecto_funimas/   ← workspace protegido, listo para desplegar
+```
+
+---
+
+## ¿Por qué existe?
+
+En muchas apps Firebase, el cliente lee y escribe Firestore directamente. Eso implica:
+
+| Problema | Consecuencia |
+| -------- | ------------ |
+| Reglas de seguridad complejas en el cliente | Difíciles de auditar y mantener |
+| Lógica de negocio expuesta en el navegador | Cualquiera puede inspeccionar el código |
+| Credenciales y permisos amplios en el cliente | Mayor superficie de ataque |
+| Migración manual a backend | Lenta, propensa a errores y regresiones |
+
+Funimas automatiza esa migración: el cliente solo usa **Firebase Auth**; el acceso a Firestore pasa por un **backend con Admin SDK** y reglas estrictas.
+
+---
+
+## ¿Para quién es?
+
+### Desarrolladores
+
+- Tienes una app React, Vite, Next.js o una **PWA en JavaScript plano** con Firestore en el cliente.
+- Quieres mover datos al servidor sin reescribir el proyecto a mano.
+- Despliegas (o planeas desplegar) en **Netlify** con Functions.
+
+### Empresas y equipos
+
+- Necesitan **auditoría y control** sobre quién accede a qué datos.
+- Buscan un camino incremental: el repo original sigue intacto; el workspace `_funimas` es el artefacto de producción.
+- Quieren reportes antes/después (`changes.html`, `validation.html`) para revisar el impacto.
+
+---
+
+## Requisitos
+
+### Para usar Funimas (CLI)
+
+| Herramienta | Versión | Obligatorio |
+| ----------- | ------- | ----------- |
+| Node.js | ≥ 20 | Sí |
+| Git | cualquiera reciente | Sí |
+
+Firebase CLI y Netlify CLI **no** hace falta instalarlas globalmente: `funimas deploy` usa `npx` automáticamente.
+
+### Para el proyecto que quieres proteger
+
+| Requisito | Obligatorio |
+| --------- | ----------- |
+| Código TypeScript o JavaScript | Sí |
+| Uso de Firebase/Firestore en el cliente | Sí |
+| `netlify.toml` en la raíz (o en el paquete del monorepo) | Sí, para despliegue en Netlify |
+
+---
+
+## Instalación
 
 ```bash
 git clone https://github.com/robinson19937/funimas.git
@@ -20,322 +111,456 @@ npm run build
 npm link
 ```
 
-> Si `npm link` da error de permisos:
->
-> ```bash
-> node dist/cli/index.js protect ./ruta-de-tu-proyecto
-> ```
-
-## Comandos CLI
-
-| Comando | Descripción |
-| ------- | ----------- |
-| `funimas setup` | Verifica prerequisitos (Node, Git, Firebase CLI, Netlify CLI) |
-| `funimas status [ruta]` | Reporta APIs Firestore listas vs pendientes sin migrar |
-| `funimas protect <ruta>` | Analiza el proyecto y genera el workspace protegido |
-| `funimas deploy [workspace] [opciones]` | Despliega reglas Firestore y sitio Netlify |
-
-### Verificar entorno
+Verifica que funciona:
 
 ```bash
 funimas setup
 ```
 
-Comprueba Node.js, Git y las CLIs opcionales. **No necesitas instalar Firebase ni Netlify globalmente**: `funimas deploy` usa `npx firebase-tools@latest` y `npx netlify-cli@latest` automáticamente.
+> **Sin permisos para `npm link`:** usa la ruta directa al binario:
+>
+> ```bash
+> node dist/cli/index.js protect ./ruta-de-tu-proyecto
+> ```
 
-### Verificar APIs antes de proteger
+---
 
-```bash
-funimas status ./ruta-de-tu-proyecto
-```
-
-Analiza el código **sin crear el workspace** y muestra qué operaciones Firestore se reescriben automáticamente y cuáles requieren migración manual (`runTransaction`, `writeBatch`, Storage, etc.).
-
-### Proteger un proyecto
+## Inicio rápido
 
 ```bash
-funimas protect ./ruta-de-tu-proyecto
-funimas protect ./ruta-de-tu-proyecto --force   # sobrescribe <proyecto>_funimas si ya existe
-```
+# 1. Revisar qué se puede migrar automáticamente
+funimas status ./mi-proyecto
 
-**Ejemplos incluidos:**
+# 2. Generar el workspace protegido
+funimas protect ./mi-proyecto
 
-```bash
-funimas protect ./examples/react-firebase-crud
-funimas protect ./examples/tenis-monorepo/tenis
-```
+# 3. Preparar credenciales
+cd mi-proyecto_funimas
+cp .env.example .env
+# Edita .env con tu service account de Firebase
 
-### Desplegar a producción
-
-```bash
-cd <proyecto>_funimas
-cp .env.example .env          # completa credenciales Firebase + service account
 npm install
-npm run build
 
-# Autenticación (solo la primera vez)
-npx firebase-tools@latest login
-npx netlify-cli@latest login
+# 4. Verificar antes de desplegar
+funimas deploy . --check
 
-# Despliegue completo: reglas Firestore + sitio Netlify
+# 5. Desplegar (reglas Firestore + sitio Netlify)
 funimas deploy . --import-env --prod
 ```
 
-**Opciones de `deploy`:**
+---
+
+## Comandos
+
+### Resumen
+
+| Comando | Descripción |
+| ------- | ----------- |
+| `funimas setup` | Verifica Node, Git y CLIs opcionales |
+| `funimas status [ruta]` | APIs Firestore listas vs pendientes (sin crear workspace) |
+| `funimas protect <ruta>` | Analiza, transforma y genera `<ruta>_funimas/` |
+| `funimas deploy [workspace]` | Despliega reglas Firestore y sitio Netlify |
+
+### `funimas status`
+
+Analiza el código **sin crear el workspace**:
+
+```bash
+funimas status ./mi-proyecto
+```
+
+Muestra:
+
+- Operaciones Firestore con reescritura automática (`getDoc`, `addDoc`, etc.)
+- APIs no soportadas (`runTransaction`, `writeBatch`, …)
+- Operaciones de Firebase Storage (sin transformación automática hoy)
+- Firebase Auth (se mantiene en el cliente)
+
+### `funimas protect`
+
+```bash
+funimas protect ./mi-proyecto
+funimas protect ./mi-proyecto --force   # sobrescribe mi-proyecto_funimas si ya existe
+```
+
+Al finalizar, revisa los reportes:
+
+```text
+mi-proyecto/.funimas/reports/changes.html      # diff antes/después
+mi-proyecto/.funimas/reports/validation.html   # resultado de validación
+mi-proyecto/.funimas/reports/summary.json      # métricas
+```
+
+### `funimas deploy`
+
+```bash
+funimas deploy ./mi-proyecto_funimas --check
+funimas deploy ./mi-proyecto_funimas --import-env --prod
+funimas deploy ./mi-proyecto_funimas --dry-run --prod
+```
 
 | Opción | Descripción |
 | ------ | ----------- |
 | `--prod` | Despliegue a producción en Netlify |
 | `--import-env` | Importa variables desde `.env` a Netlify (`netlify env:import`) |
+| `--check` | Valida workspace y `.env` sin desplegar |
+| `--dry-run` | Muestra los comandos sin ejecutarlos |
 | `--skip-firestore` | Omite `firebase deploy --only firestore:rules` |
 | `--skip-netlify` | Omite `netlify deploy` |
-| `--dry-run` | Muestra los comandos sin ejecutarlos |
-| `--check` | Valida workspace, `.env` y configuración sin desplegar |
-
-### Verificar antes de desplegar
-
-```bash
-funimas deploy <proyecto>_funimas --check
-```
-
-Comprueba que existan `firebase.json`, `firestore.rules`, `funimas.config.json`, `netlify.toml` y que `.env` tenga las credenciales del servidor.
 
 ---
 
-## Flujo completo (protección → producción)
+## Flujo completo: de protect a producción
 
 ```mermaid
-flowchart LR
-    A[funimas setup] --> B[funimas protect]
-    B --> C[Workspace _funimas]
-    C --> D[cp .env.example .env]
-    D --> E[npm install && npm run build]
-    E --> F[firebase login + netlify login]
-    F --> G[funimas deploy --import-env --prod]
-    G --> H[Firestore rules + Netlify site]
+flowchart TD
+    A[Proyecto original] --> B[funimas status]
+    B --> C[funimas protect]
+    C --> D[Workspace _funimas]
+    D --> E[cp .env.example .env]
+    E --> F[npm install]
+    F --> G[funimas deploy --check]
+    G --> H{¿Listo?}
+    H -->|Sí| I[funimas deploy --import-env --prod]
+    H -->|No| J[Corregir .env / config]
+    J --> G
+    I --> K[Firestore rules + Netlify site]
 ```
 
----
+### Paso a paso detallado
 
-## ¿Qué hace `funimas protect`?
-
-1. Crea **backup** en `<proyecto>/.funimas/backups/`
-2. Genera el workspace **`<proyecto>_funimas/`** (aquí ocurren todos los cambios)
-3. Analiza el código y aplica transformaciones automáticas
-4. **Genera configuración de despliegue** (ver tabla abajo)
-5. Escribe informes en `<proyecto>/.funimas/reports/`
-
-**El proyecto original no se modifica.**
-
-| Qué buscas | Dónde está |
-| ---------- | ---------- |
-| Proyecto listo para desplegar | `<proyecto>_funimas/` |
-| Backup | `<proyecto>/.funimas/backups/` |
-| Informe de cambios | `<proyecto>/.funimas/reports/changes.html` (diff antes/después + archivos generados) |
-
----
-
-## Requisitos del proyecto a analizar
-
-| Requisito | Obligatorio |
-| --------- | ----------- |
-| Código TypeScript o JavaScript | Sí |
-| `netlify.toml` en la raíz (o monorepo) | Sí (despliegue en Netlify) |
-| Uso de Firebase/Firestore en el cliente | Sí |
-
-### Qué transforma hoy (automático)
-
-| Operación Firestore | Reescritura automática |
-| ------------------- | ---------------------- |
-| `addDoc()` | `Funimas.database.insert(collection, data)` |
-| `setDoc()` | `Funimas.database.set(collection, id, data)` |
-| `updateDoc()` | `Funimas.database.update(collection, id, data)` |
-| `deleteDoc()` | `Funimas.database.delete(collection, id)` |
-| `getDoc()` | `Funimas.database.get(collection, id)` |
-| `getDocs()` | `Funimas.database.list(collection)` |
-| `onSnapshot(doc(...))` | `Funimas.database.poll(collection, id, callback)` |
-| `onSnapshot(collection(...))` | `Funimas.database.pollCollection(collection, callback)` |
-
-También resuelve `const ref = doc(...)` / `const col = collection(...)` usados como argumento.
-
-`poll` y `pollCollection` usan el servidor (polling cada ~5 s por defecto). El callback recibe un objeto compatible con snapshot de Firestore (`exists()`, `data()`, `id`; en colecciones `docs`, `empty`, `forEach`).
-
-### Qué aún requiere migración manual
-
-| API | Estado |
-| --- | ------ |
-| `runTransaction` | Detectado por `funimas status` — migrar a mutaciones del SDK o lógica de dominio |
-| `writeBatch` | Detectado por `funimas status` — reemplazar por mutaciones del SDK |
-| Lógica de dominio compleja (clubs/ladder) | Métodos tipados: `fetchClubDocument`, `mutateClubDocument`, `pollClubDocument` |
-
-Ver el ejemplo en `examples/tenis-monorepo/tenis/src/lib/firestoreClub.ts`.
-
----
-
-## Archivos que genera Funimas (nuevos)
-
-En `<proyecto>_funimas/` se crean:
-
-```
-shared/                          # Lógica de negocio compartida (autorización, mutaciones)
-runtime/
-  handler.ts                     # Punto de entrada del servidor
-  router.ts                        # Rutas HTTP /api/*
-  middleware/authMiddleware.ts     # Verificación de Firebase ID token
-  middleware/authorization.ts    # Reglas de negocio
-  controllers/clubsController.ts
-  repositories/firestoreRepository.ts  # Firebase Admin SDK (Firestore real)
-sdk/
-  index.ts                         # export const Funimas / configureFunimas
-  database/DatabaseClient.ts       # Cliente HTTP con Bearer token
-netlify/functions/
-  funimas.ts                       # Handler principal (/api/clubs/*, /api/insert)
-  database_insert.ts               # Compatibilidad con rewrites addDoc()
-firestore.rules                    # Reglas generadas (escrituras cliente bloqueadas)
-firebase.json                      # Config para firebase deploy --only firestore:rules
-.env.example                       # Plantilla de variables de entorno
-src/types/netlify.d.ts             # (o types/netlify.d.ts)
-src/types/firebase-admin.d.ts      # Stubs para validación TypeScript
-```
-
-También actualiza en el workspace:
-
-- `tsconfig.json` — paths `@funimas/sdk`, `@funimas/shared`
-- `package.json` — añade `@netlify/functions`, `firebase-admin`, `@types/node`
-- `netlify.toml` — añade redirects `/api/*` y config de functions si faltan
-
-## Archivos que modifica Funimas (en el workspace)
-
-Solo los archivos de tu app donde detecta operaciones transformables. Hoy:
-
-- Archivos con `addDoc(...)` → sustituidos por `Funimas.database.insert(...)` + import de `@funimas/sdk`
-
-El resto de tu código **no se toca**. Revisa siempre `.funimas/reports/changes.md` después de `protect`.
-
----
-
-## Despliegue: qué es automático y qué requiere credenciales
-
-### Generado automáticamente por `funimas protect`
-
-| Artefacto | Qué hace |
-| --------- | -------- |
-| `netlify.toml` | Parchea redirects `/api/*` → `funimas` y `[functions]` con `firebase-admin` |
-| `firestore.rules` | Bloquea escrituras directas del cliente por colección detectada |
-| `firebase.json` | Apunta a `firestore.rules` para `firebase deploy` |
-| `.env.example` | Lista todas las variables necesarias |
-
-### Variables de entorno (una sola vez)
-
-Copia la plantilla y completa tus credenciales:
+**1. Proteger el proyecto**
 
 ```bash
-cd <proyecto>_funimas
+funimas protect ./mi-proyecto --force
+```
+
+**2. Entrar al workspace**
+
+```bash
+cd mi-proyecto_funimas
+```
+
+**3. Configurar variables de entorno**
+
+```bash
 cp .env.example .env
 ```
 
-| Variable | Dónde se usa | Descripción |
-| -------- | ------------ | ----------- |
-| `FIREBASE_PROJECT_ID` | Servidor | ID del proyecto Firebase |
-| `FIREBASE_CLIENT_EMAIL` | Servidor | Email del service account |
-| `FIREBASE_PRIVATE_KEY` | Servidor | Clave privada (con `\n` escapados) |
-| `VITE_FIREBASE_API_KEY` | Cliente | Config Firebase Auth |
-| `VITE_FIREBASE_AUTH_DOMAIN` | Cliente | Dominio Auth |
-| `VITE_FIREBASE_PROJECT_ID` | Cliente | Mismo project ID |
-| `VITE_FUNIMAS_API_URL` | Cliente | `/api` en producción (por defecto) |
+Edita `.env` (ver [Variables de entorno](#variables-de-entorno)).
 
-Con `--import-env`, `funimas deploy` ejecuta `netlify env:import .env` para subir las variables del servidor a Netlify sin configuración manual en el dashboard.
-
-### Reglas de Firestore
-
-Funimas genera reglas restrictivas por colección detectada en tu código:
-
-```
-allow read, create, update, delete: if false;   # solo Admin SDK accede
-```
-
-Con estas reglas, **ningún cliente** puede leer ni escribir Firestore directamente. Todo el acceso pasa por el backend Funimas.
-
-El despliegue se hace con:
+**4. Instalar dependencias del workspace**
 
 ```bash
-funimas deploy . --skip-netlify          # solo reglas
-# o incluido en el deploy completo:
-funimas deploy . --import-env --prod
+npm install
 ```
 
-Internamente ejecuta `npx firebase-tools@latest deploy --only firestore:rules --project <FIREBASE_PROJECT_ID>` (lee el project ID desde `.env`).
-
-### Autenticación CLI (primera vez)
+**5. Autenticación CLI (primera vez, en local)**
 
 ```bash
 npx firebase-tools@latest login
 npx netlify-cli@latest login
+npx netlify-cli@latest link    # vincular al sitio Netlify existente
 ```
 
-### Despliegue en CI (GitHub Actions, etc.)
-
-Define tokens en el entorno del pipeline — `funimas deploy` los reenvía automáticamente a las CLIs:
-
-| Variable | Uso |
-| -------- | --- |
-| `FIREBASE_TOKEN` | `firebase deploy --only firestore:rules` sin login interactivo |
-| `NETLIFY_AUTH_TOKEN` | `netlify deploy --prod` sin login interactivo |
-
-`funimas deploy --check` indica si los tokens CI están presentes.
-
-### Desplegar el workspace en Netlify (repo nuevo o rama)
-
-Netlify debe construir y publicar **`<proyecto>_funimas/`**, no el repo original:
-
-1. **Repo dedicado:** sube solo el contenido de `<proyecto>_funimas/` a un repositorio nuevo y conéctalo en Netlify.
-2. **Misma repo, rama dedicada:** ejecuta `funimas protect` y commitea el workspace en una rama (p. ej. `funimas-prod`); configura Netlify para esa rama y directorio raíz.
-3. **CLI directo:** desde tu máquina o CI, `funimas deploy <proyecto>_funimas --import-env --prod` (no requiere cambiar el repo original).
-
-### Despliegue Netlify
+**6. Verificar**
 
 ```bash
-funimas deploy <proyecto>_funimas --prod
+funimas deploy . --check
 ```
 
-Equivalente a `npx netlify-cli@latest deploy --prod` desde el workspace, con validación previa de `firebase.json` y `firestore.rules`.
+**7. Desplegar**
+
+```bash
+funimas deploy . --import-env --prod
+```
+
+Esto ejecuta internamente:
+
+```bash
+npx firebase-tools@latest deploy --only firestore:rules --project <FIREBASE_PROJECT_ID>
+npx netlify-cli@latest env:import .env
+npx netlify-cli@latest deploy --prod
+```
 
 ---
 
-## Flujo de datos después de proteger
+## Qué genera y qué modifica
 
+### El proyecto original no se toca
+
+| Artefacto | Ubicación |
+| --------- | --------- |
+| Backup | `mi-proyecto/.funimas/backups/` |
+| Reportes | `mi-proyecto/.funimas/reports/` |
+| Workspace de producción | `mi-proyecto_funimas/` |
+
+### Archivos nuevos en el workspace
+
+```text
+mi-proyecto_funimas/
+├── netlify/
+│   └── functions/
+│       ├── funimas.ts              # API principal (/api/*)
+│       └── database_insert.ts      # Compatibilidad insert
+├── runtime/
+│   ├── handler.ts
+│   ├── router.ts
+│   ├── middleware/authMiddleware.ts
+│   └── repositories/firestoreRepository.ts
+├── sdk/
+│   ├── index.ts                    # Funimas / configureFunimas
+│   └── database/DatabaseClient.ts
+├── shared/                         # Lógica compartida
+├── firestore.rules                 # Reglas estrictas por colección
+├── firebase.json
+├── funimas.config.json             # Colecciones permitidas
+├── .env.example
+└── netlify.toml                    # Redirect /api/* + functions
 ```
-React (cliente)
-  → Firebase Auth (signIn, getIdToken)     ← sigue en el cliente
-  → @funimas/sdk (Authorization: Bearer)
-  → Netlify Function funimas.ts
-  → runtime/ + Firebase Admin SDK
-  → Firestore
+
+### Archivos que Funimas puede modificar
+
+Solo los archivos donde detecta operaciones transformables, por ejemplo:
+
+```javascript
+// Antes
+import { addDoc, collection, db } from './firebase.js';
+await addDoc(collection(db, 'clientes'), { nombre: 'Ana' });
+
+// Después
+import { Funimas } from '@funimas/sdk';
+await Funimas.database.insert('clientes', { nombre: 'Ana' });
+```
+
+También procesa **scripts `<script type="module">` inline en HTML**, los reescribe y los fusiona de vuelta en el HTML.
+
+---
+
+## APIs soportadas
+
+### Firestore — reescritura automática
+
+| API cliente | SDK Funimas |
+| ----------- | ----------- |
+| `addDoc(collection, data)` | `Funimas.database.insert(collection, data)` |
+| `setDoc(doc(...), data)` | `Funimas.database.set(collection, id, data)` |
+| `updateDoc(doc(...), data)` | `Funimas.database.update(collection, id, data)` |
+| `deleteDoc(doc(...))` | `Funimas.database.delete(collection, id)` |
+| `getDoc(doc(...))` | `Funimas.database.get(collection, id)` |
+| `getDocs(collection(...))` | `Funimas.database.list(collection)` |
+| `getDocs(query(..., where(...)))` | `Funimas.database.listWhere(collection, field, op, value)` |
+| Paths con subcolecciones | `getAtPath`, `setAtPath`, `updateAtPath`, `deleteAtPath` |
+| `deleteDoc(snap.ref)` tras `Funimas.database.get` | `Funimas.database.delete(...)` |
+| `onSnapshot(doc(...))` | `Funimas.database.poll(collection, id, callback)` |
+| `onSnapshot(collection(...))` | `Funimas.database.pollCollection(collection, callback)` |
+
+### Firebase Auth — sin cambios
+
+Login, registro y `getIdToken()` **siguen en el cliente**. El SDK envía el token como `Authorization: Bearer <token>` al backend.
+
+### Aún sin transformación automática
+
+| API | Recomendación |
+| --- | ------------- |
+| `runTransaction` | Migrar a mutaciones del SDK o lógica en el servidor |
+| `writeBatch` | Reemplazar por operaciones individuales del SDK |
+| Firebase Storage (`uploadBytes`, `getDownloadURL`, …) | Migración manual o futura versión de Funimas |
+| `setDoc` con `{ merge: true }` vía refs dinámicas | Revisar caso a caso |
+
+Usa `funimas status` para ver el inventario exacto de tu proyecto.
+
+---
+
+## Variables de entorno
+
+Copia la plantilla:
+
+```bash
+cd mi-proyecto_funimas
+cp .env.example .env
+```
+
+### Servidor (obligatorias — Netlify Functions)
+
+```env
+FIREBASE_PROJECT_ID=tu-proyecto-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk@tu-proyecto.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+Obtén estas credenciales en **Firebase Console → Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada**.
+
+### Cliente (recomendadas — proyectos Vite/React)
+
+```env
+VITE_FIREBASE_API_KEY=tu-api-key
+VITE_FIREBASE_AUTH_DOMAIN=tu-proyecto.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=tu-proyecto-id
+VITE_FUNIMAS_API_URL=/api
+```
+
+En PWAs con config Firebase hardcodeada en `firebase.js`, las variables `VITE_*` pueden no ser necesarias en el cliente.
+
+### CI / GitHub Actions
+
+```bash
+export FIREBASE_TOKEN=...
+export NETLIFY_AUTH_TOKEN=...
+funimas deploy ./mi-proyecto_funimas --import-env --prod
 ```
 
 ---
 
-## Scripts de desarrollo (repo Funimas)
+## Despliegue
 
-| Script  | Descripción |
-| ------- | ----------- |
-| `dev`   | CLI en modo desarrollo |
-| `build` | Compila TypeScript |
-| `test`  | Pruebas (Vitest) |
-| `lint`  | ESLint |
+### Qué es automático
 
-## Estructura del repo Funimas (herramienta CLI)
+| Acción | Quién lo hace |
+| ------ | ------------- |
+| Generar `netlify.toml`, reglas, functions, SDK | `funimas protect` |
+| Validar workspace y `.env` | `funimas deploy --check` |
+| Desplegar reglas Firestore | `funimas deploy` |
+| Importar env a Netlify | `funimas deploy --import-env` |
+| Desplegar sitio + functions | `funimas deploy --prod` |
 
+### Qué es manual (una vez)
+
+| Acción | Cómo |
+| ------ | ---- |
+| Crear proyecto Firebase | Firebase Console |
+| Crear sitio Netlify | Netlify Dashboard |
+| Service account + `.env` | Firebase Console → clave privada |
+| `firebase login` / `netlify login` | Primera vez en local |
+| `netlify link` | Vincular workspace al sitio |
+
+### Estrategias de publicación
+
+**Opción A — CLI directa (recomendada para empezar)**
+
+```bash
+cd mi-proyecto_funimas
+funimas deploy . --import-env --prod
 ```
+
+**Opción B — Repo dedicado**
+
+Sube solo el contenido de `mi-proyecto_funimas/` a un repositorio y conéctalo en Netlify.
+
+**Opción C — Rama dedicada**
+
+```bash
+funimas protect ./mi-proyecto --force
+git checkout -b funimas-prod
+git add mi-proyecto_funimas/
+git commit -m "chore: workspace Funimas"
+```
+
+Configura Netlify para publicar esa rama y directorio.
+
+### Reglas de Firestore generadas
+
+Funimas bloquea el acceso directo del cliente por colección detectada:
+
+```javascript
+match /cotizaciones/{documentId} {
+  allow read, create, update, delete: if false;
+}
+```
+
+> **Importante:** despliega las reglas estrictas solo cuando el cliente ya use `@funimas/sdk` correctamente. Si despliegas reglas antes de que el SDK funcione en el navegador, la app dejará de acceder a Firestore.
+
+### Orden seguro recomendado
+
+```bash
+# 1. Preview primero (sin --prod)
+funimas deploy . --import-env
+
+# 2. Probar login + una operación CRUD en la URL de preview
+
+# 3. Producción
+funimas deploy . --import-env --prod
+```
+
+---
+
+## Proyectos PWA / JavaScript plano
+
+En apps **sin bundler** (imports ES modules directos en el navegador), Funimas reescribe el código pero el navegador **no resuelve** `@funimas/sdk` solo. Necesitas dos pasos adicionales:
+
+### 1. Import map en tu HTML principal
+
+```html
+<script type="importmap">
+{
+  "imports": {
+    "@funimas/sdk": "/sdk/index.ts"
+  }
+}
+</script>
+```
+
+> En producción puedes apuntar a archivos `.js` compilados si añades un paso de build del SDK.
+
+### 2. Conectar Firebase Auth al SDK
+
+El SDK requiere el token del usuario autenticado. Crea un bootstrap (por ejemplo en `js/funimas.js`):
+
+```javascript
+import { configureFunimas } from '@funimas/sdk';
+import { auth } from './firebase.js';
+
+export const Funimas = configureFunimas({
+  getIdToken: () => auth.currentUser?.getIdToken() ?? Promise.resolve(null),
+});
+```
+
+Y en el resto de módulos importa desde ahí:
+
+```javascript
+import { Funimas } from '../js/funimas.js';
+```
+
+En proyectos **Vite / React / Next**, el bundler resuelve `@funimas/sdk` automáticamente vía `tsconfig` paths.
+
+---
+
+## Ejemplos incluidos
+
+```bash
+# React + Firebase CRUD
+funimas protect ./examples/react-firebase-crud
+
+# Monorepo con lógica de dominio (clubs/ladder)
+funimas protect ./examples/tenis-monorepo/tenis
+```
+
+---
+
+## Desarrollo del repo Funimas
+
+```bash
+npm run dev      # CLI en modo desarrollo
+npm run build    # Compilar TypeScript
+npm test         # Vitest (143+ tests)
+npm run lint     # ESLint
+```
+
+### Estructura del repositorio
+
+```text
 src/
-  cli/           Comandos: setup, status, protect, deploy
-  deploy/        Orquestación Firebase + Netlify CLI
-  generator/     Generadores de config, reglas y entorno
-  pipeline/      Pipeline de protección
-templates/       Plantillas runtime, SDK, firestore.rules, .env
-examples/        Proyectos de referencia (react-firebase-crud, tenis-monorepo)
-tests/           Pruebas unitarias
+  cli/           setup, status, protect, deploy
+  pipeline/      Orquestación de protect
+  rewriter/      Reglas de transformación AST
+  generator/     Runtime, SDK, reglas, .env
+  deploy/        Firebase + Netlify CLI
+templates/       Plantillas Handlebars
+examples/        Proyectos de referencia
+tests/           Pruebas unitarias e integración
 ```
+
+---
 
 ## Licencia
 
