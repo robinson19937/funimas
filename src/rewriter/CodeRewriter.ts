@@ -13,6 +13,7 @@ import { DatabaseDeleteRewriteRule } from './rules/DatabaseDeleteRewriteRule.js'
 import { DatabaseReadRewriteRule } from './rules/DatabaseReadRewriteRule.js';
 import { DatabaseSubscribeRewriteRule } from './rules/DatabaseSubscribeRewriteRule.js';
 import type { SemanticOperation } from '../semantic/SemanticOperation.js';
+import type { SourceFile } from 'ts-morph';
 
 interface PendingRewrite {
   operation: SemanticOperation;
@@ -124,12 +125,18 @@ export class CodeRewriter implements CodeRewriterService {
         for (const pendingRewrite of pendingRewrites.filter(
           (pending) => pending.operation.file === filePath,
         )) {
+          const formattedAfter = this.extractFormattedAfter(
+            sourceFile,
+            pendingRewrite.operation.line,
+            pendingRewrite.application.after,
+          );
+
           await context.history.record({
             file: filePath,
             operation: pendingRewrite.operation.type,
             rewriteRule: pendingRewrite.application.ruleName,
             before: pendingRewrite.application.before,
-            after: pendingRewrite.application.after,
+            after: formattedAfter,
             generatedFiles: pendingRewrite.application.relatedFiles,
             modifiedImports,
             status: 'COMPLETED',
@@ -138,6 +145,7 @@ export class CodeRewriter implements CodeRewriterService {
             riskLevel: pendingRewrite.application.riskLevel,
             generatedBy: pendingRewrite.application.ruleName,
             templateUsed: pendingRewrite.application.templateUsed,
+            sourceLine: pendingRewrite.operation.line,
           });
         }
       }
@@ -153,6 +161,16 @@ export class CodeRewriter implements CodeRewriterService {
       startedAt,
       finishedAt,
     });
+  }
+
+  private extractFormattedAfter(sourceFile: SourceFile, line: number, fallback: string): string {
+    const lineText = sourceFile.getFullText().split(/\r?\n/)[line - 1]?.trim() ?? '';
+
+    if (lineText.includes('Funimas.')) {
+      return lineText;
+    }
+
+    return fallback.trim();
   }
 }
 

@@ -34,6 +34,7 @@ export interface TransformationRecordData {
   rollbackReason?: string;
   validationErrors?: string[];
   executionTime?: number;
+  sourceLine?: number;
 }
 
 export class TransformationRecord {
@@ -59,6 +60,7 @@ export class TransformationRecord {
   readonly rollbackReason: string;
   readonly validationErrors: string[];
   readonly executionTime: number;
+  readonly sourceLine?: number;
 
   constructor(data: TransformationRecordData) {
     this.id = data.id ?? randomUUID();
@@ -83,6 +85,7 @@ export class TransformationRecord {
     this.rollbackReason = data.rollbackReason ?? '';
     this.validationErrors = data.validationErrors ?? [];
     this.executionTime = data.executionTime ?? 0;
+    this.sourceLine = data.sourceLine;
   }
 
   toJSON(): Record<string, unknown> {
@@ -109,6 +112,7 @@ export class TransformationRecord {
       rollbackReason: this.rollbackReason,
       validationErrors: this.validationErrors,
       executionTime: this.executionTime,
+      sourceLine: this.sourceLine,
     };
   }
 
@@ -144,6 +148,7 @@ export class TransformationRecord {
         ? data.validationErrors.map(String)
         : undefined,
       executionTime: typeof data.executionTime === 'number' ? data.executionTime : undefined,
+      sourceLine: typeof data.sourceLine === 'number' ? data.sourceLine : undefined,
     });
   }
 
@@ -171,6 +176,7 @@ export class TransformationRecord {
       rollbackReason: updates.rollbackReason ?? this.rollbackReason,
       validationErrors: updates.validationErrors ?? this.validationErrors,
       executionTime: updates.executionTime ?? this.executionTime,
+      sourceLine: updates.sourceLine ?? this.sourceLine,
     });
   }
 }

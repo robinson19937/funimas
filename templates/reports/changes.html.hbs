@@ -2,79 +2,323 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <title>Funimas Change Report</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Funimas — Informe de cambios</title>
     <style>
-      body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.5; }
-      .record { margin-bottom: 2rem; border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }
-      .section { margin: 1rem 0; }
-      .section summary { cursor: pointer; font-weight: 600; }
-      .removed { color: #c00; background: #fff5f5; padding: 0.75rem; border-radius: 4px; }
-      .added { color: #080; background: #f5fff5; padding: 0.75rem; border-radius: 4px; }
-      .arrow { text-align: center; font-size: 1.5rem; color: #666; }
-      .meta { color: #555; font-size: 0.9rem; }
-      .risk-low { color: #080; }
-      .risk-medium { color: #c80; }
-      .risk-high { color: #c00; }
-      .risk-critical { color: #800; font-weight: bold; }
+      :root {
+        color-scheme: light;
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --border: #dbe3ee;
+        --text: #0f172a;
+        --muted: #64748b;
+        --before-bg: #fff1f2;
+        --before-border: #fecdd3;
+        --after-bg: #ecfdf5;
+        --after-border: #a7f3d0;
+        --accent: #2563eb;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        font-family: Inter, system-ui, sans-serif;
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 3rem;
+      }
+
+      h1, h2, h3 { margin: 0 0 0.5rem; }
+
+      .hero {
+        margin-bottom: 2rem;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 0.75rem;
+        margin: 1.25rem 0 2rem;
+      }
+
+      .stat {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem;
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 1.5rem;
+        color: var(--accent);
+      }
+
+      .section-title {
+        margin: 2rem 0 1rem;
+        padding-bottom: 0.35rem;
+        border-bottom: 2px solid var(--border);
+      }
+
+      .file-card,
+      .generated-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .change {
+        border-top: 1px solid var(--border);
+        padding-top: 1rem;
+        margin-top: 1rem;
+      }
+
+      .change:first-of-type {
+        border-top: 0;
+        padding-top: 0;
+        margin-top: 0.75rem;
+      }
+
+      .change-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+
+      .badge.failed {
+        background: #fef2f2;
+        color: #b91c1c;
+      }
+
+      .diff {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+      }
+
+      @media (max-width: 800px) {
+        .diff { grid-template-columns: 1fr; }
+      }
+
+      .diff-col {
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+
+      .diff-label {
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 0.45rem 0.75rem;
+      }
+
+      .diff-col.before .diff-label {
+        background: var(--before-bg);
+        border-bottom: 1px solid var(--before-border);
+        color: #be123c;
+      }
+
+      .diff-col.after .diff-label {
+        background: var(--after-bg);
+        border-bottom: 1px solid var(--after-border);
+        color: #047857;
+      }
+
+      pre {
+        margin: 0;
+        padding: 0.85rem;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.85rem;
+        line-height: 1.45;
+      }
+
+      .diff-col.before pre { background: var(--before-bg); }
+      .diff-col.after pre { background: var(--after-bg); }
+
+      .details {
+        margin-top: 0.75rem;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .details p { margin: 0.35rem 0; }
+
+      .generated-list {
+        margin: 0;
+        padding-left: 1.2rem;
+        columns: 2;
+      }
+
+      @media (max-width: 700px) {
+        .generated-list { columns: 1; }
+      }
+
+      .generated-group + .generated-group {
+        margin-top: 1rem;
+      }
+
+      .generated-group h3 {
+        font-size: 0.95rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      .empty {
+        color: var(--muted);
+        font-style: italic;
+      }
+
+      .risk-low { color: #047857; }
+      .risk-medium { color: #b45309; }
+      .risk-high { color: #b91c1c; }
+      .risk-critical { color: #7f1d1d; font-weight: 700; }
     </style>
   </head>
   <body>
-    <h1>Funimas Change Report</h1>
-    <p class="meta">Versión: {{funimasVersion}}</p>
-    {{#each records}}
-    <article class="record">
-      <h2>{{relativeFile}}</h2>
-      <p class="meta">
-        <strong>Regla:</strong> {{rewriteRule}} |
-        <strong>Operación:</strong> {{operation}} |
-        <strong>Riesgo:</strong>
-        <span class="risk-{{toLowerCase riskLevel}}">{{riskLevel}}</span>
-      </p>
+    <div class="container">
+      <header class="hero">
+        <h1>Funimas — Informe de cambios</h1>
+        <p class="meta">
+          Versión {{funimasVersion}} · {{date}} · Duración {{duration}} ms · ID {{executionId}}
+        </p>
+      </header>
 
-      <details class="section" open>
-        <summary>ANTES</summary>
-        <pre class="removed">{{before}}</pre>
-      </details>
+      <section class="stats">
+        <div class="stat"><strong>{{stats.filesModified}}</strong> archivos modificados</div>
+        <div class="stat"><strong>{{stats.codeChanges}}</strong> reescrituras de código</div>
+        <div class="stat"><strong>{{stats.filesGenerated}}</strong> archivos generados</div>
+        <div class="stat"><strong>{{stats.operationsTransformed}}</strong> operaciones transformadas</div>
+      </section>
 
-      <div class="arrow">↓</div>
+      <h2 class="section-title">Cambios en tu código</h2>
 
-      <details class="section" open>
-        <summary>DESPUÉS</summary>
-        <pre class="added">{{after}}</pre>
-      </details>
+      {{#if fileChanges.length}}
+        {{#each fileChanges}}
+        <article class="file-card">
+          <h2>{{relativeFile}}</h2>
+          <p class="meta">{{changes.length}} transformación(es) en este archivo</p>
 
-      <div class="arrow">↓</div>
+          {{#each changes}}
+          <div class="change">
+            <div class="change-meta">
+              {{#if sourceLine}}<span><strong>Línea</strong> {{sourceLine}}</span>{{/if}}
+              <span><strong>Regla</strong> {{rewriteRule}}</span>
+              <span><strong>Operación</strong> {{operation}}</span>
+              <span class="risk-{{toLowerCase riskLevel}}"><strong>Riesgo</strong> {{riskLevel}}</span>
+              {{#if rollbackExecuted}}<span class="badge failed">Rollback ejecutado</span>{{/if}}
+              {{#if validationStatus}}<span class="badge">{{validationStatus}}</span>{{/if}}
+            </div>
 
-      <details class="section">
-        <summary>Motivo</summary>
-        <p>{{reason}}</p>
-      </details>
+            <div class="diff">
+              <div class="diff-col before">
+                <div class="diff-label">Antes</div>
+                <pre>{{escapeHtml before}}</pre>
+              </div>
+              <div class="diff-col after">
+                <div class="diff-label">Después</div>
+                <pre>{{escapeHtml after}}</pre>
+              </div>
+            </div>
 
-      <div class="arrow">↓</div>
-
-      <details class="section">
-        <summary>Beneficio</summary>
-        <p>{{benefit}}</p>
-      </details>
-
-      <div class="arrow">↓</div>
-
-      <details class="section">
-        <summary>Archivos relacionados</summary>
-        <ul>
-          {{#each generatedFiles}}
-          <li>{{this}}</li>
+            {{#if reason}}
+            <div class="details">
+              <p><strong>Motivo:</strong> {{reason}}</p>
+              {{#if benefit}}<p><strong>Beneficio:</strong> {{benefit}}</p>{{/if}}
+            </div>
+            {{/if}}
+          </div>
           {{/each}}
-        </ul>
-      </details>
+        </article>
+        {{/each}}
+      {{else}}
+        <p class="empty">No se detectaron reescrituras de código en archivos de la aplicación.</p>
+      {{/if}}
 
-      <div class="arrow">↓</div>
+      <h2 class="section-title">Archivos generados por Funimas</h2>
 
-      <details class="section">
-        <summary>Estado</summary>
-        <p>{{status}} — {{generatedAt}} (v{{compilerVersion}})</p>
-      </details>
-    </article>
-    {{/each}}
+      <article class="generated-card">
+        {{#if generatedArtifacts.runtime.length}}
+        <div class="generated-group">
+          <h3>Runtime (servidor)</h3>
+          <ul class="generated-list">
+            {{#each generatedArtifacts.runtime}}<li><code>{{this}}</code></li>{{/each}}
+          </ul>
+        </div>
+        {{/if}}
+
+        {{#if generatedArtifacts.sdk.length}}
+        <div class="generated-group">
+          <h3>SDK (cliente)</h3>
+          <ul class="generated-list">
+            {{#each generatedArtifacts.sdk}}<li><code>{{this}}</code></li>{{/each}}
+          </ul>
+        </div>
+        {{/if}}
+
+        {{#if generatedArtifacts.functions.length}}
+        <div class="generated-group">
+          <h3>Netlify Functions</h3>
+          <ul class="generated-list">
+            {{#each generatedArtifacts.functions}}<li><code>{{this}}</code></li>{{/each}}
+          </ul>
+        </div>
+        {{/if}}
+
+        {{#if generatedArtifacts.shared.length}}
+        <div class="generated-group">
+          <h3>Shared</h3>
+          <ul class="generated-list">
+            {{#each generatedArtifacts.shared}}<li><code>{{this}}</code></li>{{/each}}
+          </ul>
+        </div>
+        {{/if}}
+
+        {{#if generatedArtifacts.other.length}}
+        <div class="generated-group">
+          <h3>Otros</h3>
+          <ul class="generated-list">
+            {{#each generatedArtifacts.other}}<li><code>{{this}}</code></li>{{/each}}
+          </ul>
+        </div>
+        {{/if}}
+
+        {{#unless stats.filesGenerated}}
+        <p class="empty">No se generaron archivos nuevos en esta ejecución.</p>
+        {{/unless}}
+      </article>
+    </div>
   </body>
 </html>

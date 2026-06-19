@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { basename, join, relative, resolve } from 'node:path';
+import { join } from 'node:path';
 
 import type { SemanticResult } from '../semantic/SemanticResult.js';
 import { TransformationHistory } from '../history/TransformationHistory.js';
 import { RuntimeTemplateEngine } from '../runtime/RuntimeTemplateEngine.js';
 import { VERSION } from '../utils/version.js';
+import { buildChangeReportViewModel } from './change-report-builder.js';
 
 export interface ChangeReportSummary {
   modifiedFiles: string[];
@@ -22,6 +23,8 @@ export interface ChangeReportSummary {
   generatedSDKFiles: string[];
   compilerVersion: string;
   executionId: string;
+  codeChanges: number;
+  filesGenerated: number;
 }
 
 export interface ChangeReportResult {
@@ -55,86 +58,67 @@ export class ChangeReportGenerator {
 
     await mkdir(reportDir, { recursive: true });
 
-    const reportRecords = records
-      .filter((record) => record.before.length > 0 || record.after.length > 0)
-      .map((record) => ({
-        relativeFile: this.toWorkspaceRelativePath(workspacePath, record.file),
-        before: record.before,
-        after: record.after,
-        rewriteRule: record.rewriteRule,
-        operation: record.operation,
-        reason: record.reason,
-        benefit: record.benefit,
-        riskLevel: record.riskLevel,
-        generatedFiles: record.generatedFiles,
-        generatedAt: record.generatedAt,
-        compilerVersion: record.compilerVersion,
-        status: record.status,
-      }));
+    const viewModel = buildChangeReportViewModel({
+      workspacePath,
+      records,
+      semanticResult,
+      duration,
+      finishedAt,
+      funimasVersion: VERSION,
+      executionId,
+    });
 
-    const modifiedFiles = [
-      ...new Set(
-        records
-          .filter((record) => record.before.length > 0)
-          .map((record) => this.toWorkspaceRelativePath(workspacePath, record.file)),
-      ),
-    ];
-
+    const modifiedFiles = viewModel.fileChanges.map((group) => group.relativeFile);
     const generatedFiles = [
-      ...new Set(records.flatMap((record) => record.generatedFiles)),
+      ...new Set([
+        ...viewModel.generatedArtifacts.runtime,
+        ...viewModel.generatedArtifacts.sdk,
+        ...viewModel.generatedArtifacts.functions,
+        ...viewModel.generatedArtifacts.shared,
+        ...viewModel.generatedArtifacts.other,
+        ...records
+          .filter((record) => record.before.length > 0)
+          .flatMap((record) => record.generatedFiles),
+      ]),
     ];
-
-    const generatedFunctions = [
-      ...new Set(
-        generatedFiles.filter((file) => file.startsWith('netlify/functions/')),
-      ),
-    ];
-
-    const generatedRuntimeFiles = [
-      ...new Set(generatedFiles.filter((file) => file.startsWith('runtime/'))),
-    ];
-
-    const generatedSDKFiles = [
-      ...new Set(generatedFiles.filter((file) => file.startsWith('sdk/'))),
-    ];
-
-    const operationsFound = semanticResult.operationsByType;
-    const operationsTransformed = records.reduce<Record<string, number>>((counts, record) => {
-      if (record.before.length > 0) {
-        counts[record.operation] = (counts[record.operation] ?? 0) + 1;
-      }
-
-      return counts;
-    }, {});
 
     const totalReasons = records.filter((record) => record.reason.length > 0).length;
     const totalBenefits = records.filter((record) => record.benefit.length > 0).length;
 
+    const relatedFunctionFiles = records
+      .filter((record) => record.before.length > 0)
+      .flatMap((record) => record.generatedFiles)
+      .filter((file) => file.startsWith('netlify/functions/'));
+
     const summary: ChangeReportSummary = {
       modifiedFiles,
       generatedFiles,
-      operationsFound,
-      operationsTransformed,
+      operationsFound: viewModel.operationsFound,
+      operationsTransformed: viewModel.operationsTransformed,
       duration,
       date: finishedAt.toISOString(),
       funimasVersion: VERSION,
       totalBenefits,
       totalReasons,
-      generatedFunctions,
-      generatedRuntimeFiles,
-      generatedSDKFiles,
+      generatedFunctions: [
+        ...new Set([...viewModel.generatedArtifacts.functions, ...relatedFunctionFiles]),
+      ],
+      generatedRuntimeFiles: viewModel.generatedArtifacts.runtime,
+      generatedSDKFiles: viewModel.generatedArtifacts.sdk,
       compilerVersion: VERSION,
       executionId,
+      codeChanges: viewModel.stats.codeChanges,
+      filesGenerated: viewModel.stats.filesGenerated,
     };
 
-    const markdown = await this.templateEngine.render('reports/changes.md.hbs', {
-      records: reportRecords,
-      funimasVersion: VERSION,
-    });
-    const html = await this.templateEngine.render('reports/changes.html.hbs', {
-      records: reportRecords,
-      funimasVersion: VERSION,
-    });
+    const markdown = await this.templateEngine.render(
+      'reports/changes.md.hbs',
+      viewModel as unknown as Record<string, unknown>,
+    );
+    const html = await this.templateEngine.render(
+      'reports/changes.html.hbs',
+      viewModel as unknown as Record<string, unknown>,
+    );
     const summaryJson = await this.templateEngine.render('reports/summary.json.hbs', {
       ...summary,
     } as Record<string, unknown>);
@@ -153,15 +137,5 @@ export class ChangeReportGenerator {
       summaryPath,
       summary,
     };
-  }
-
-  private toWorkspaceRelativePath(workspacePath: string, filePath: string): string {
-    const workspaceRoot = resolve(workspacePath);
-
-    if (filePath.startsWith(workspaceRoot)) {
-      return relative(workspaceRoot, filePath);
-    }
-
-    return basename(filePath);
   }
 }

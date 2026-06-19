@@ -126,9 +126,21 @@ describe('ChangeReportGenerator', () => {
       operation: 'DATABASE_INSERT',
       rewriteRule: 'DatabaseInsertRewriteRule',
       before: 'await addDoc(collection(db,"clientes"),cliente);',
-      after: 'await Funimas.database.insert("clientes",cliente);',
+      after: 'await Funimas.database.insert("clientes", cliente);',
       generatedFiles: [],
       modifiedImports: ['@funimas/sdk:Funimas'],
+      status: 'COMPLETED',
+      sourceLine: 18,
+    });
+
+    await history.record({
+      file: join(workspacePath, 'runtime/router.ts'),
+      operation: 'GENERATE_RUNTIME',
+      rewriteRule: 'RuntimeGenerator',
+      before: '',
+      after: 'export const router = {};',
+      generatedFiles: ['runtime/router.ts'],
+      modifiedImports: [],
       status: 'COMPLETED',
     });
 
@@ -152,12 +164,20 @@ describe('ChangeReportGenerator', () => {
 
     expect(markdown).toContain('DatabaseInsertRewriteRule');
     expect(markdown).toContain('await addDoc(collection(db,"clientes"),cliente);');
-    expect(markdown).toContain('await Funimas.database.insert("clientes",cliente);');
-    expect(markdown).toContain('### Motivo');
-    expect(markdown).toContain('### Beneficio');
+    expect(markdown).toContain('await Funimas.database.insert("clientes", cliente);');
+    expect(markdown).toContain('## Resumen');
+    expect(markdown).toContain('### src/App.tsx');
+    expect(markdown).toContain('## Archivos generados por Funimas');
+    expect(markdown).toContain('runtime/router.ts');
+    expect(markdown).not.toContain('export const router = {}');
     expect(html).toContain('<html');
+    expect(html).toContain('diff-col before');
+    expect(html).toContain('diff-col after');
     expect(html).toContain('DATABASE_INSERT');
+    expect(html).toContain('Archivos generados por Funimas');
     expect(summary.modifiedFiles).toEqual(['src/App.tsx']);
+    expect(summary.codeChanges).toBe(1);
+    expect(summary.filesGenerated).toBe(1);
     expect(summary.operationsFound).toMatchObject({ DATABASE_INSERT: 6 });
     expect(summary.operationsTransformed).toMatchObject({ DATABASE_INSERT: 1 });
     expect(summary.funimasVersion).toBe('0.1.0');
