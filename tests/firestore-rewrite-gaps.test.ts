@@ -170,4 +170,70 @@ export async function loadSettings(companyId) {
     );
     expect(content).not.toContain('getDoc(doc(');
   });
+
+  it('reescribe refs devueltos por helpers como getSubscriptionRef', async () => {
+    const content = await rewriteContent(`import { doc, db, getDoc, setDoc, updateDoc, serverTimestamp } from './firebase.js';
+
+const SUBSCRIPTION_DOC_ID = 'main';
+
+function getSubscriptionRef(companyId) {
+  return doc(db, 'companies', companyId, 'subscription', SUBSCRIPTION_DOC_ID);
+}
+
+export async function loadSubscription(companyId) {
+  return getDoc(getSubscriptionRef(companyId));
+}
+
+export async function resetSubscription(companyId) {
+  await setDoc(getSubscriptionRef(companyId), { documentsUsed: 0 }, { merge: true });
+}
+
+export async function bumpUsage(companyId) {
+  await updateDoc(getSubscriptionRef(companyId), { updatedAt: serverTimestamp() });
+}
+`);
+
+    expect(content).toContain(
+      "Funimas.database.getAtPath('companies', companyId, 'subscription', SUBSCRIPTION_DOC_ID)",
+    );
+    expect(content).toContain(
+      "Funimas.database.updateAtPath('companies', companyId, 'subscription', SUBSCRIPTION_DOC_ID",
+    );
+    expect(content).toContain("return Funimas.database.getAtPath('companies', companyId, 'subscription', SUBSCRIPTION_DOC_ID)");
+    expect(content).not.toContain('getDoc(getSubscriptionRef');
+  });
+
+  it('reescribe doc con colección dinámica en dbHelpers', async () => {
+    const content = await rewriteContent(`import { db, doc, getDoc, deleteDoc } from './firebase.js';
+
+export async function deleteCompanyDoc(collectionName, id, companyId) {
+  const snap = await getDoc(doc(db, collectionName, id));
+  if (!snap.exists() || snap.data()?.companyId !== companyId) {
+    return { ok: false };
+  }
+
+  await deleteDoc(snap.ref);
+  return { ok: true };
+}
+`);
+
+    expect(content).toContain('Funimas.database.get(collectionName, id)');
+    expect(content).toContain('Funimas.database.delete(collectionName, id)');
+    expect(content).not.toContain('getDoc(doc(');
+  });
+
+  it('convierte setDoc con merge:true a updateAtPath', async () => {
+    const content = await rewriteContent(`import { doc, db, setDoc, serverTimestamp } from './firebase.js';
+
+export async function saveSettings(companyId, updates) {
+  const settingsRef = doc(db, 'companies', companyId, 'settings', 'main');
+  await setDoc(settingsRef, { ...updates, updatedAt: serverTimestamp() }, { merge: true });
+}
+`);
+
+    expect(content).toContain(
+      "Funimas.database.updateAtPath('companies', companyId, 'settings', 'main'",
+    );
+    expect(content).not.toContain('setDoc(settingsRef');
+  });
 });

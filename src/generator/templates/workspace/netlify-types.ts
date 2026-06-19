@@ -62,7 +62,7 @@ declare module 'firebase-admin/firestore' {
   export interface DocumentReference {
     id: string;
     get(): Promise<DocumentSnapshot>;
-    set(data: unknown): Promise<void>;
+    set(data: unknown, options?: { merge?: boolean }): Promise<void>;
     delete(): Promise<void>;
     update(data: unknown): Promise<void>;
   }
@@ -87,6 +87,7 @@ declare module 'firebase-admin/firestore' {
   }
   export const FieldValue: {
     serverTimestamp(): unknown;
+    increment(amount: number): unknown;
   };
 }
 `;

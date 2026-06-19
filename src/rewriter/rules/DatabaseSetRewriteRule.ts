@@ -1,3 +1,6 @@
+import type { CallExpression } from 'ts-morph';
+import { SyntaxKind } from 'ts-morph';
+
 import { TransformationBenefit } from '../../report/TransformationBenefit.js';
 import { TransformationReason } from '../../report/TransformationReason.js';
 import type { SemanticOperation } from '../../semantic/SemanticOperation.js';
@@ -6,6 +9,29 @@ import type { RewriteContext } from '../RewriteContext.js';
 import type { RewriteRule } from '../RewriteRule.js';
 import { extractDocReference, formatDocumentPathCall } from '../firestore-rewrite-utils.js';
 import { findCallExpressionAt } from '../rewrite-utils.js';
+
+function hasMergeOption(callExpression: CallExpression): boolean {
+  const options = callExpression.getArguments()[2];
+
+  if (!options || options.getKind() !== SyntaxKind.ObjectLiteralExpression) {
+    return false;
+  }
+
+  return options
+    .asKindOrThrow(SyntaxKind.ObjectLiteralExpression)
+    .getProperties()
+    .some((property) => {
+      if (property.getKind() !== SyntaxKind.PropertyAssignment) {
+        return false;
+      }
+
+      const assignment = property.asKindOrThrow(SyntaxKind.PropertyAssignment);
+      const name = assignment.getName();
+      const initializer = assignment.getInitializer();
+
+      return name === 'merge' && initializer?.getText() === 'true';
+    });
+}
 
 export class DatabaseSetRewriteRule implements RewriteRule {
   readonly id = 'database-set-rewrite';
@@ -39,7 +65,8 @@ export class DatabaseSetRewriteRule implements RewriteRule {
     }
 
     const before = callExpression.getText();
-    const after = formatDocumentPathCall('set', docReference, [dataArgument.getText()]);
+    const method = hasMergeOption(callExpression) ? 'update' : 'set';
+    const after = formatDocumentPathCall(method, docReference, [dataArgument.getText()]);
 
     callExpression.replaceWithText(after);
 

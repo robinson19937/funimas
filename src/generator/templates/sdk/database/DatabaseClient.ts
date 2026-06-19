@@ -62,9 +62,38 @@ function isServerTimestampValue(value: unknown): boolean {
   return methodName === 'serverTimestamp' || constructorName.includes('ServerTimestamp');
 }
 
+function isIncrementValue(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const methodName = Reflect.get(value, '_methodName') ?? Reflect.get(value, 'methodName');
+  const constructorName = typeof value.constructor?.name === 'string' ? value.constructor.name : '';
+
+  return methodName === 'increment' || constructorName.includes('NumericIncrementFieldValue');
+}
+
+function getIncrementAmount(value: unknown): number {
+  if (!isRecord(value)) {
+    return 1;
+  }
+
+  const operand = Reflect.get(value, '_operand') ?? Reflect.get(value, 'operand');
+
+  if (typeof operand === 'number') {
+    return operand;
+  }
+
+  return 1;
+}
+
 function encodeFirestoreJson(value: unknown): unknown {
   if (isServerTimestampValue(value)) {
     return { [FIRESTORE_SENTINEL_KEY]: 'serverTimestamp' };
+  }
+
+  if (isIncrementValue(value)) {
+    return { [FIRESTORE_SENTINEL_KEY]: 'increment', amount: getIncrementAmount(value) };
   }
 
   if (Array.isArray(value)) {
