@@ -579,9 +579,12 @@ funimas protect ./examples/tenis-monorepo/tenis
 ```bash
 npm run dev      # CLI en modo desarrollo
 npm run build    # Compilar TypeScript
-npm test         # Vitest (143+ tests)
+npm test         # Vitest (170+ tests)
 npm run lint     # ESLint
+npx vitest run tests/regression/protect-regression.test.ts   # regresión con fixtures
 ```
+
+Ver `tests/regression/README.md` para añadir fixtures de repos productivos.
 
 ### Estructura del repositorio
 

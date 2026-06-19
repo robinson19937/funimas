@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Recibos</title>
+  </head>
+  <body>
+    <script type="module">
+      import { collection, getDocs, query, where } from 'firebase/firestore';
+      import { db } from './js/firebase.js';
+
+      export async function loadRecibos(userId) {
+        const q = query(collection(db, 'recibos'), where('userId', '==', userId));
+        return getDocs(q);
+      }
+    </script>
+  </body>
+</html>
