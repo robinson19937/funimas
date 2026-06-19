@@ -1,4 +1,4 @@
-From 5c585d5c61c2ce9a79b1d6e3b098afcfea971deb Mon Sep 17 00:00:00 2001
+From ca707d5524001bb43b2b1ffa7df133dd899ce020 Mon Sep 17 00:00:00 2001
 From: Cursor Agent <cursoragent@cursor.com>
 Date: Fri, 19 Jun 2026 21:32:53 +0000
 Subject: [PATCH] =?UTF-8?q?fix:=20completar=20migraci=C3=B3n=20Funimas=20y?=
@@ -19,13 +19,13 @@ reglas bloqueaban el acceso directo desde el cliente.
 - Limpiar imports Firestore no usados en auth.js
 ---
  firestore.rules                             | 193 ++++++++++++++++----
- js/auth.js                                  |   2 -
+ js/auth.js                                  |   6 -
  js/companySettings.js                       | 117 +++++++-----
  js/dbHelpers.js                             |   7 +-
  package-lock.json                           |  76 +++++++-
  runtime/repositories/firestoreRepository.ts |   4 +-
  types/firebase-admin.d.ts                   |   2 +-
- 7 files changed, 308 insertions(+), 93 deletions(-)
+ 7 files changed, 308 insertions(+), 97 deletions(-)
 
 diff --git a/firestore.rules b/firestore.rules
 index 7faf33c..f66e21c 100644
@@ -246,7 +246,7 @@ index 7faf33c..f66e21c 100644
 +}
 \ No newline at end of file
 diff --git a/js/auth.js b/js/auth.js
-index a2339bb..dcaa269 100644
+index a2339bb..82dcdef 100644
 --- a/js/auth.js
 +++ b/js/auth.js
 @@ -1,9 +1,7 @@
@@ -259,6 +259,17 @@ index a2339bb..dcaa269 100644
    onAuthStateChanged,
    sendPasswordResetEmail,
    serverTimestamp,
+@@ -41,10 +39,6 @@ async function bootstrapMissingCompanyData({ uid, email }) {
+   const timestamp = serverTimestamp();
+   const companyId = resolveCompanyId();
+ 
+-  const userRef = doc(db, "users", uid);
+-  const companyRef = doc(db, "companies", companyId);
+-  const settingsRef = doc(db, "companies", companyId, "settings", "main");
+-
+   const [userSnap, companySnap] = await Promise.all([Funimas.database.get('users', uid), Funimas.database.get('companies', companyId)]);
+ 
+   if (!userSnap.exists()) {
 diff --git a/js/companySettings.js b/js/companySettings.js
 index 7198227..8c5f5fb 100644
 --- a/js/companySettings.js
