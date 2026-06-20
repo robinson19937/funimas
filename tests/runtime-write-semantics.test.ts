@@ -40,4 +40,14 @@ describe('runtime write semantics', () => {
     expect(repository).toContain('Usa set/upsert para creación inicial');
     expect(repository).toContain('.set(decodeWriteData(data), { merge: true })');
   });
+
+  it('lee todos los upserts antes de escribir en mutaciones de dominio', async () => {
+    const engine = new RuntimeTemplateEngine();
+    const repository = await engine.render('runtime/repositories/firestoreRepository.hbs');
+
+    expect(repository).toContain('const upsertSnapshots = new Map');
+    expect(repository).toContain('upsertSnapshots.set(path, await transaction.get(ref))');
+    expect(repository).toContain('await this.applyDomainWrite(transaction, write, params, upsertSnapshots)');
+    expect(repository).toContain('const snapshot = upsertSnapshots.get(path)');
+  });
 });

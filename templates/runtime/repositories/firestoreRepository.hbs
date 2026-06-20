@@ -1,4 +1,4 @@
-import { FieldValue, getFirestore, type Transaction } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore, type DocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
 
 import { applyClubAction, createInitialClubDocument } from '../../shared/ladderMutations.js';
 import type { ClubAction, ClubDocument, ClubSettings } from '../../shared/types/club.js';
@@ -253,8 +253,21 @@ export class FirestoreRepository {
     }
 
     await getDb().runTransaction(async (transaction) => {
+      const upsertSnapshots = new Map<string, DocumentSnapshot>();
+
       for (const write of definition.writes) {
-        await this.applyDomainWrite(transaction, write, params);
+        if (write.kind !== 'upsert') {
+          continue;
+        }
+
+        const pathSegments = resolvePathSegments(write.path, params);
+        const path = this.toDocumentPath(pathSegments);
+        const ref = getDb().doc(path);
+        upsertSnapshots.set(path, await transaction.get(ref));
+      }
+
+      for (const write of definition.writes) {
+        await this.applyDomainWrite(transaction, write, params, upsertSnapshots);
       }
     });
   }
@@ -263,6 +276,7 @@ export class FirestoreRepository {
     transaction: Transaction,
     write: DomainWriteDefinition,
     params: Record<string, unknown>,
+    upsertSnapshots: Map<string, DocumentSnapshot> = new Map(),
   ): Promise<void> {
     const pathSegments = resolvePathSegments(write.path, params);
 
@@ -287,9 +301,9 @@ export class FirestoreRepository {
         transaction.set(ref, data);
         return;
       case 'upsert': {
-        const snapshot = await transaction.get(ref);
+        const snapshot = upsertSnapshots.get(path);
         const merged = {
-          ...(snapshot.exists ? ((snapshot.data() ?? {}) as Record<string, unknown>) : {}),
+          ...(snapshot?.exists ? ((snapshot.data() ?? {}) as Record<string, unknown>) : {}),
           ...data,
         };
         transaction.set(ref, merged);
