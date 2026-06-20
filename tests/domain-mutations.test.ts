@@ -66,6 +66,18 @@ describe('write-template-builder', () => {
     const spec = { param: 'amount', sign: -1 as const };
     expect(isIncrementAmountSpec(spec)).toBe(true);
   });
+
+  it('convierte propiedades abreviadas en parámetros de plantilla', () => {
+    const template = buildDataTemplate(
+      parseObjectLiteral('{ companyId, email, createdAt: timestamp }'),
+    );
+
+    expect(template).toEqual({
+      companyId: '$companyId',
+      email: '$email',
+      createdAt: '$timestamp',
+    });
+  });
 });
 
 describe('CompositeWriteDetector', () => {
@@ -158,5 +170,18 @@ document.getElementById('loginBtn')?.addEventListener('click', async () => {
     expect(mutations[0]?.id).toBe('registerCompany');
     expect(mutations[0]?.replacementScope).toBe('statement-range');
     expect(mutations[0]?.writes).toHaveLength(3);
+    expect(mutations[0]?.invokeParams).toEqual(
+      expect.arrayContaining(['uid', 'email', 'companyId', 'businessName', 'timestamp']),
+    );
+    expect(mutations[0]?.writes[0]?.dataTemplate).toEqual({
+      companyId: '$companyId',
+      email: '$email',
+      createdAt: '$timestamp',
+    });
+    expect(mutations[0]?.writes[2]?.dataTemplate).toMatchObject({
+      businessName: '$businessName',
+      companyId: '$companyId',
+      email: '$email',
+    });
   });
 });

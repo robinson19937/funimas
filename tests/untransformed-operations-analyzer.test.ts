@@ -76,6 +76,7 @@ describe('analyzeUntransformedOperations', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]?.reason).toBe('not-transformed');
     expect(findings[0]?.callee).toBe('getDoc');
+    expect(findings[0]?.blocking).toBe(false);
   });
 
   it('ignora operaciones ya transformadas según el historial', () => {

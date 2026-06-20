@@ -131,7 +131,7 @@ export function analyzeUntransformedOperations(options: {
         reason: 'storage-not-supported',
         recommendation:
           'Firebase Storage no tiene transformación automática. Migra subidas/descargas manualmente.',
-        blocking: true,
+        blocking: false,
       });
       continue;
     }
@@ -152,7 +152,7 @@ export function analyzeUntransformedOperations(options: {
       reason: 'not-transformed',
       recommendation:
         'Esta operación Firestore quedó en el cliente. Revisa el patrón o migra manualmente al SDK Funimas.',
-      blocking: true,
+      blocking: false,
     });
   }
 

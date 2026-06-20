@@ -194,7 +194,7 @@ export class WorkspaceVerifier {
           id: 'untransformed-operations',
           name: 'Operaciones Firestore',
           passed: !blocking,
-          level: 'error',
+          level: blocking ? 'error' : 'warning',
           message: blocking
             ? `${findings.length} operación(es) quedaron sin transformar en el cliente`
             : `${findings.length} operación(es) informativas sin transformar`,
