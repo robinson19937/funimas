@@ -58,7 +58,7 @@ export const REGRESSION_FIXTURES: RegressionFixtureDefinition[] = [
       contentAssertions: [
         {
           file: 'src/App.tsx',
-          includes: ['Funimas.database.insert'],
+          includes: ["Funimas.domain.execute('createDemoUsers', {}"],
           excludes: ['addDoc(collection(db'],
         },
       ],
@@ -77,10 +77,7 @@ export const REGRESSION_FIXTURES: RegressionFixtureDefinition[] = [
       contentAssertions: [
         {
           file: 'js/auth.js',
-          includes: [
-            'Funimas.database.set(',
-            'Funimas.database.upsertDocumentAtPath(',
-          ],
+          includes: ["Funimas.domain.execute('registerCompany'"],
           excludes: ['setDoc(companyRef', 'merge: true'],
         },
         {
@@ -111,17 +108,18 @@ export const REGRESSION_FIXTURES: RegressionFixtureDefinition[] = [
   },
   {
     id: 'unsupported-transaction',
-    description: 'Proyecto con runTransaction debe quedar no listo para producción',
+    description: 'Proyecto con runTransaction se convierte en mutación de dominio atómica',
     sourcePath: join(regressionRoot, 'fixtures', 'unsupported-transaction'),
     expectations: {
-      success: false,
+      success: true,
       validationValid: true,
-      verificationReady: false,
-      operationsUntransformed: 1,
+      verificationReady: true,
+      operationsUntransformed: 0,
       contentAssertions: [
         {
           file: 'app.js',
-          includes: ['runTransaction'],
+          includes: ["Funimas.domain.execute('transferCredits'"],
+          excludes: ['runTransaction'],
         },
       ],
     },

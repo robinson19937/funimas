@@ -43,6 +43,7 @@ import { ProjectScanner, type ProjectScannerService } from '../scanner/index.js'
 import type { ScanResult } from '../scanner/ScanResult.js';
 import { SemanticAnalyzer, type SemanticAnalyzerService } from '../semantic/index.js';
 import type { SemanticResult } from '../semantic/SemanticResult.js';
+import { SemanticResult as SemanticResultModel } from '../semantic/SemanticResult.js';
 import { SemanticOperation } from '../semantic/SemanticOperation.js';
 import { ConsoleOutputWriter, NullOutputWriter, type OutputWriter } from '../utils/index.js';
 import { VERSION } from '../utils/version.js';
@@ -55,6 +56,12 @@ import { RollbackManager, RollbackContext, type RollbackManagerService } from '.
 import type { ProtectPipelineResult } from './ProtectPipelineResult.js';
 import { WorkspaceVerifier } from '../verify/index.js';
 import type { WorkspaceVerificationReport } from '../verify/index.js';
+import {
+  CompositeWriteDetector,
+  DomainMutationApplicator,
+  DomainMutationRegistryGenerator,
+  type DomainMutation,
+} from '../domain/index.js';
 
 export interface ProtectPipelineOptions {
   projectPath: string;
@@ -83,6 +90,9 @@ export interface ProtectPipelineOptions {
   workspaceConfigGenerator?: WorkspaceConfigGenerator;
   deployConfigGenerator?: DeployConfigGenerator;
   workspaceVerifier?: WorkspaceVerifier;
+  compositeWriteDetector?: CompositeWriteDetector;
+  domainMutationRegistryGenerator?: DomainMutationRegistryGenerator;
+  domainMutationApplicator?: DomainMutationApplicator;
 }
 
 export class ProtectPipeline {
@@ -112,6 +122,9 @@ export class ProtectPipeline {
   private readonly workspaceConfigGenerator: WorkspaceConfigGenerator;
   private readonly deployConfigGenerator: DeployConfigGenerator;
   private readonly workspaceVerifier: WorkspaceVerifier;
+  private readonly compositeWriteDetector: CompositeWriteDetector;
+  private readonly domainMutationRegistryGenerator: DomainMutationRegistryGenerator;
+  private readonly domainMutationApplicator: DomainMutationApplicator;
   private readonly executionId: string;
 
   constructor(options: ProtectPipelineOptions) {
@@ -147,6 +160,11 @@ export class ProtectPipeline {
     this.deployConfigGenerator =
       options.deployConfigGenerator ?? new DeployConfigGenerator();
     this.workspaceVerifier = options.workspaceVerifier ?? new WorkspaceVerifier();
+    this.compositeWriteDetector = options.compositeWriteDetector ?? new CompositeWriteDetector();
+    this.domainMutationRegistryGenerator =
+      options.domainMutationRegistryGenerator ?? new DomainMutationRegistryGenerator();
+    this.domainMutationApplicator =
+      options.domainMutationApplicator ?? new DomainMutationApplicator();
     this.executionId = randomUUID();
   }
 
@@ -179,13 +197,30 @@ export class ProtectPipeline {
     this.output.writeln();
 
     const semanticResult = await this.semanticAnalyzer.analyze(graphResult);
+    const domainMutations = await this.compositeWriteDetector.detect(
+      workspaceResult.workspaceProject,
+      semanticResult,
+    );
+    const semanticResultWithMutations = new SemanticResultModel({
+      operations: semanticResult.operations,
+      totalOperations: semanticResult.totalOperations,
+      operationsByType: semanticResult.operationsByType,
+      startedAt: semanticResult.startedAt,
+      finishedAt: semanticResult.finishedAt,
+      domainMutations,
+    });
 
-    this.printSemanticSummary(semanticResult);
+    this.printSemanticSummary(semanticResultWithMutations);
+
+    if (domainMutations.length > 0) {
+      this.output.writeln(`Mutaciones de dominio detectadas: ${domainMutations.length}`);
+      this.output.writeln();
+    }
 
     this.output.writeln('Planificando transformación...');
     this.output.writeln();
 
-    const plannerResult = this.transformationPlanner.plan(semanticResult);
+    const plannerResult = this.transformationPlanner.plan(semanticResultWithMutations);
 
     this.printPlannerSummary(plannerResult);
 
@@ -196,7 +231,7 @@ export class ProtectPipeline {
       new AdapterContext({
         projectPath: this.projectPath,
         workspacePath: workspaceResult.workspaceProject,
-        semanticResult,
+        semanticResult: semanticResultWithMutations,
         plannerResult,
       }),
     );
@@ -205,6 +240,9 @@ export class ProtectPipeline {
 
     const history = new TransformationHistory(workspaceResult.workspaceProject);
     await history.initialize();
+    const domainMutationOperationKeys = new Set(
+      domainMutations.flatMap((mutation) => mutation.operationKeys),
+    );
 
     let generationError: GenerationVerificationError | undefined;
 
@@ -215,11 +253,12 @@ export class ProtectPipeline {
         generatorContext: new GeneratorContext({
           projectPath: this.projectPath,
           workspacePath: workspaceResult.workspaceProject,
-          semanticResult,
+          semanticResult: semanticResultWithMutations,
           adapter: adapterDetection.adapter,
         }),
         workspacePath: workspaceResult.workspaceProject,
         history,
+        domainMutations,
       });
     } catch (error) {
       if (error instanceof GenerationVerificationError) {
@@ -255,13 +294,27 @@ export class ProtectPipeline {
         projectPath: this.projectPath,
         workspaceResult,
         plannerResult,
-        semanticResult,
+        semanticResult: semanticResultWithMutations,
         validationResult,
         durationMs,
         transformationsRegistered: history.getRecordCount(),
         reportsDirectory,
         generationError: generationError.message,
       };
+    }
+
+    if (domainMutations.length > 0) {
+      this.output.writeln('Aplicando mutaciones de dominio...');
+      this.output.writeln();
+
+      const domainApplyResult = await this.domainMutationApplicator.apply(
+        workspaceResult.workspaceProject,
+        domainMutations,
+        history,
+      );
+
+      this.output.writeln(`✔ ${domainApplyResult.mutationsApplied} mutación(es) de dominio aplicadas`);
+      this.output.writeln();
     }
 
     this.output.writeln('Reescribiendo código...');
@@ -271,8 +324,9 @@ export class ProtectPipeline {
       new RewriteContext({
         projectPath: this.projectPath,
         workspacePath: workspaceResult.workspaceProject,
-        semanticResult,
+        semanticResult: semanticResultWithMutations,
         history,
+        excludedOperationKeys: domainMutationOperationKeys,
       }),
     );
 
@@ -290,7 +344,7 @@ export class ProtectPipeline {
       projectPath: this.projectPath,
       workspacePath: workspaceResult.workspaceProject,
       history,
-      semanticResult,
+      semanticResult: semanticResultWithMutations,
     });
 
     let validationResult = await this.validationEngine.validateContext(validationContext);
@@ -399,7 +453,7 @@ export class ProtectPipeline {
     await this.changeReportGenerator.generate(
       workspaceResult.workspaceProject,
       history,
-      semanticResult,
+      semanticResultWithMutations,
       pipelineFinishedAt.getTime() - pipelineStartedAt.getTime(),
       pipelineFinishedAt,
       this.executionId,
@@ -417,7 +471,7 @@ export class ProtectPipeline {
 
     this.printFinalSummary({
       workspaceResult,
-      semanticResult,
+      semanticResult: semanticResultWithMutations,
       validationResult,
       verificationReport,
       durationMs,
@@ -433,7 +487,7 @@ export class ProtectPipeline {
       projectPath: this.projectPath,
       workspaceResult,
       plannerResult,
-      semanticResult,
+      semanticResult: semanticResultWithMutations,
       validationResult,
       verificationReport,
       durationMs,
@@ -684,8 +738,10 @@ export class ProtectPipeline {
     generatorContext: GeneratorContext;
     workspacePath: string;
     history: TransformationHistory;
+    domainMutations: DomainMutation[];
   }): Promise<void> {
-    const { adapter, adapterDetection, generatorContext, workspacePath, history } = options;
+    const { adapter, adapterDetection, generatorContext, workspacePath, history, domainMutations } =
+      options;
 
     this.output.writeln('Plan de generación:');
     this.output.writeln();
@@ -811,6 +867,14 @@ export class ProtectPipeline {
     }
 
     this.output.writeln('Generando Runtime...');
+    this.output.writeln();
+
+    await this.domainMutationRegistryGenerator.generate(
+      workspacePath,
+      domainMutations,
+      history,
+    );
+    this.output.writeln('✔ runtime/domain/mutations.ts');
     this.output.writeln();
 
     const runtimeResult = await this.backendRuntimeGenerator.generate(

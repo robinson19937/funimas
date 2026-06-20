@@ -1,5 +1,6 @@
 export function renderSdkIndex(): string {
   return `import { DatabaseClient } from './database/DatabaseClient.js';
+import { DomainClient } from './domain/DomainClient.js';
 
 export type {
   DatabaseClientOptions,
@@ -10,6 +11,7 @@ export type {
   QuerySnapshotLike,
 } from './database/DatabaseClient.js';
 export { DatabaseClient, ApiError } from './database/DatabaseClient.js';
+export { DomainClient } from './domain/DomainClient.js';
 
 export type AuthHelpers = {
   getIdToken: () => Promise<string | null>;
@@ -22,9 +24,14 @@ export function createFunimas(auth: AuthHelpers, baseUrl = '/api') {
     baseUrl,
     getIdToken: auth.getIdToken,
   });
+  const domain = new DomainClient({
+    baseUrl,
+    getIdToken: auth.getIdToken,
+  });
 
   return {
     database,
+    domain,
     auth,
   };
 }
@@ -382,14 +389,59 @@ export class DatabaseClient {
   }
 }
 
+export class DomainClient {
+  constructor(options) {
+    this.baseUrl = (options.baseUrl ?? '/api').replace(/\\/$/, '');
+    this.getIdToken = options.getIdToken;
+    this.fetchFn = options.fetchFn ?? fetch.bind(globalThis);
+  }
+
+  async execute(mutationId, params = {}) {
+    const token = await this.getIdToken();
+
+    if (!token) {
+      throw new ApiError('Debes iniciar sesión para continuar.', 401);
+    }
+
+    const response = await this.fetchFn(this.baseUrl + '/domain/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + token,
+      },
+      body: JSON.stringify({ mutationId, params }),
+    });
+
+    const payload = await response.json().catch(() => ({
+      success: false,
+      message: 'Respuesta inválida del servidor.',
+    }));
+
+    if (!response.ok || !payload.success) {
+      throw new ApiError(
+        payload.message ?? 'No se pudo ejecutar la mutación de dominio.',
+        response.status,
+        payload.code,
+      );
+    }
+
+    return { ok: true };
+  }
+}
+
 export function createFunimas(auth, baseUrl = '/api') {
   const database = new DatabaseClient({
+    baseUrl,
+    getIdToken: auth.getIdToken,
+  });
+  const domain = new DomainClient({
     baseUrl,
     getIdToken: auth.getIdToken,
   });
 
   return {
     database,
+    domain,
     auth,
   };
 }

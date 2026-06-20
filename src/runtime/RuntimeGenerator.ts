@@ -1,6 +1,8 @@
+import { access } from 'node:fs/promises';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
+import { DomainMutationRegistryGenerator } from '../domain/DomainMutationRegistryGenerator.js';
 import { GeneratedFileVerifier } from '../generator/GeneratedFileVerifier.js';
 import type { RuntimeContext } from './RuntimeContext.js';
 import { RuntimeResult } from './RuntimeResult.js';
@@ -73,6 +75,14 @@ export class RuntimeGenerator implements RuntimeGeneratorService {
     const startedAt = this.now();
     const workspaceRoot = resolve(context.workspacePath);
     const generatedFiles: RuntimeResult['generatedFiles'] = [];
+
+    const mutationsPath = resolve(workspaceRoot, 'runtime/domain/mutations.ts');
+
+    try {
+      await access(mutationsPath);
+    } catch {
+      await new DomainMutationRegistryGenerator().generate(workspaceRoot, []);
+    }
 
     for (const definition of this.fileDefinitions) {
       const templateData = this.getTemplateData(definition.templatePath, context);

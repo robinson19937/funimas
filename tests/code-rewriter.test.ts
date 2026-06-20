@@ -151,7 +151,7 @@ describe('ProtectCommand + CodeRewriter integration', () => {
       const workspaceApp = await readFile(join(workspacePath, 'src/App.tsx'), 'utf8');
       const untouchedApp = await readFile(join(projectDir, 'src/App.tsx'), 'utf8');
 
-      expect(workspaceApp).toContain('Funimas.database.insert');
+      expect(workspaceApp).toContain("Funimas.domain.execute('createDemoUsers'");
       expect(workspaceApp).not.toContain('addDoc(');
       expect(untouchedApp).toBe(originalApp);
 
@@ -168,14 +168,14 @@ describe('ProtectCommand + CodeRewriter integration', () => {
         await readFile(join(workspacePath, '.funimas/reports/summary.json'), 'utf8'),
       ) as Record<string, unknown>;
 
-      expect(historyContents.some((content) => content.includes('DatabaseInsertRewriteRule'))).toBe(
+      expect(historyContents.some((content) => content.includes('DomainMutationApplicator'))).toBe(
         true,
       );
       expect(historyContents.some((content) => content.includes('addDoc'))).toBe(true);
       expect(historyContents.some((content) => content.includes('"reason"'))).toBe(true);
       expect(historyContents.some((content) => content.includes('"riskLevel"'))).toBe(true);
       expect(historyFiles.length).toBeGreaterThanOrEqual(7);
-      expect(changesMarkdown).toContain('Funimas.database.insert');
+      expect(changesMarkdown).toContain("Funimas.domain.execute('createDemoUsers'");
       expect(changesMarkdown).toContain('**Motivo:**');
       expect(changesMarkdown).toContain('## Resumen');
       expect(changesMarkdown).toContain('## Archivos generados por Funimas');

@@ -12,6 +12,7 @@ export interface RewriteContextData {
   plannerResult?: PlannerResult;
   morphProject?: Project;
   history?: TransformationHistory;
+  excludedOperationKeys?: Set<string>;
 }
 
 /**
@@ -23,6 +24,7 @@ export class RewriteContext {
   readonly semanticResult: SemanticResult;
   readonly plannerResult?: PlannerResult;
   readonly history?: TransformationHistory;
+  readonly excludedOperationKeys: Set<string>;
   private morphProject?: Project;
 
   constructor(data: RewriteContextData) {
@@ -31,6 +33,7 @@ export class RewriteContext {
     this.semanticResult = data.semanticResult;
     this.plannerResult = data.plannerResult;
     this.history = data.history;
+    this.excludedOperationKeys = data.excludedOperationKeys ?? new Set();
     this.morphProject = data.morphProject;
   }
 
@@ -47,6 +50,8 @@ export class RewriteContext {
   }
 
   getRewriteableOperations(): SemanticOperation[] {
-    return new PlannerContext(this.semanticResult).getTransformableOperations();
+    return new PlannerContext(this.semanticResult)
+      .getTransformableOperations()
+      .filter((operation) => !this.excludedOperationKeys.has(`${operation.file}:${operation.line}`));
   }
 }

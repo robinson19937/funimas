@@ -92,6 +92,7 @@ describe('SDKGenerator', () => {
     expect(result.files.map((file) => file.relativePath)).toEqual([
       'sdk/index.ts',
       'sdk/database/DatabaseClient.ts',
+      'sdk/domain/DomainClient.ts',
       'sdk/index.js',
     ]);
 
@@ -261,7 +262,7 @@ describe('ProjectCodeGenerator', () => {
     expect(result.runtimeGenerated).toBe(true);
     expect(result.sdkGenerated).toBe(true);
     expect(result.functionFileNames).toEqual(['database_insert.ts']);
-    expect(result.totalFiles).toBe(5);
+    expect(result.totalFiles).toBe(6);
   });
 });
 

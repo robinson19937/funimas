@@ -69,6 +69,8 @@ declare module 'firebase-admin/firestore' {
   export interface Transaction {
     get(ref: DocumentReference): Promise<DocumentSnapshot>;
     set(ref: DocumentReference, data: unknown): void;
+    update(ref: DocumentReference, data: unknown): void;
+    delete(ref: DocumentReference): void;
   }
   export interface Query {
     where(field: string, op: string, value: unknown): Query;
