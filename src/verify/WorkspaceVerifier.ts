@@ -13,7 +13,9 @@ import {
   hasBlockingUntransformedOperations,
   type UntransformedOperationFinding,
 } from '../report/untransformed-operations-analyzer.js';
+import { CompositeWriteDetector } from '../domain/CompositeWriteDetector.js';
 import { SemanticAnalyzer } from '../semantic/index.js';
+import { SemanticResult } from '../semantic/SemanticResult.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -152,10 +154,22 @@ export class WorkspaceVerifier {
       const scanResult = await new ProjectScanner().scan(parseResult.project);
       const graphResult = new GraphBuilder().build(scanResult);
       const semanticResult = await new SemanticAnalyzer().analyze(graphResult);
+      const domainMutations = await new CompositeWriteDetector().detect(workspacePath, semanticResult);
+      const semanticWithMutations = new SemanticResult({
+        operations: semanticResult.operations,
+        totalOperations: semanticResult.totalOperations,
+        operationsByType: semanticResult.operationsByType,
+        startedAt: semanticResult.startedAt,
+        finishedAt: semanticResult.finishedAt,
+        domainMutations,
+      });
       const findings = analyzeUntransformedOperations({
         workspacePath,
-        semanticResult,
+        semanticResult: semanticWithMutations,
         records: history.getRecords(),
+        domainMutationOperationKeys: new Set(
+          domainMutations.flatMap((mutation) => mutation.operationKeys),
+        ),
       });
 
       if (findings.length === 0) {

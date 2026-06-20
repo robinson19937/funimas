@@ -3,6 +3,7 @@ import { AuthorizationError, createClubsController } from './controllers/clubsCo
 import {
   DocumentAlreadyExistsError,
   DocumentNotFoundForUpdateError,
+  DomainMutationNotFoundError,
   FirestoreRepository,
 } from './repositories/firestoreRepository.js';
 import type { AuthenticatedRequest, ApiResponse } from './models/Request.js';
@@ -365,13 +366,37 @@ export async function routeHttpRequest(request: HttpRequest): Promise<HttpRespon
       });
     }
 
+    if (method === 'POST' && path === '/api/domain/execute') {
+      return handleGenericCrud(request, async () => {
+        const body = request.body as {
+          mutationId?: string;
+          params?: Record<string, unknown>;
+        };
+
+        if (!body?.mutationId) {
+          return jsonResponse(400, {
+            success: false,
+            message: 'mutationId es obligatorio.',
+          });
+        }
+
+        await firestoreRepository.executeDomainMutation(
+          body.mutationId,
+          body.params ?? {},
+        );
+
+        return jsonResponse(200, { success: true, data: { ok: true } });
+      });
+    }
+
     return jsonResponse(404, { success: false, message: 'Ruta no encontrada.' });
   } catch (error) {
     if (
       error instanceof AuthorizationError ||
       error instanceof CollectionNotAllowedError ||
       error instanceof DocumentAlreadyExistsError ||
-      error instanceof DocumentNotFoundForUpdateError
+      error instanceof DocumentNotFoundForUpdateError ||
+      error instanceof DomainMutationNotFoundError
     ) {
       const code =
         error instanceof DocumentAlreadyExistsError ||

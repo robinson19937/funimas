@@ -4,6 +4,7 @@ import type { GeneratorContext } from './GeneratorContext.js';
 import { GeneratorResult } from './GeneratorResult.js';
 import { GeneratorFileWriter } from './GeneratorFileWriter.js';
 import { renderDatabaseClient } from './templates/sdk/database/DatabaseClient.js';
+import { renderDomainClient } from './templates/sdk/domain/DomainClient.js';
 import { renderSdkBrowserIndex, renderSdkIndex } from './templates/sdk/index.js';
 
 export interface SDKGeneratorOptions {
@@ -39,6 +40,11 @@ export class SDKGenerator implements SDKGeneratorService {
         fileName: 'DatabaseClient.ts',
         relativePath: 'sdk/database/DatabaseClient.ts',
         content: renderDatabaseClient(),
+      },
+      {
+        fileName: 'DomainClient.ts',
+        relativePath: 'sdk/domain/DomainClient.ts',
+        content: renderDomainClient(),
       },
       {
         fileName: 'index.js',

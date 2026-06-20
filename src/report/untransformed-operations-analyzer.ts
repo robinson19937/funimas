@@ -3,6 +3,7 @@ import { relative, resolve } from 'node:path';
 import type { TransformationRecord } from '../history/TransformationRecord.js';
 import type { SemanticOperation } from '../semantic/SemanticOperation.js';
 import type { SemanticResult } from '../semantic/SemanticResult.js';
+import { operationKey } from '../domain/DomainMutation.js';
 import { getUnsupportedFirestoreRecommendation } from '../status/firestore-api-catalog.js';
 
 export type UntransformedReason =
@@ -80,13 +81,18 @@ export function analyzeUntransformedOperations(options: {
   workspacePath: string;
   semanticResult: SemanticResult;
   records: TransformationRecord[];
+  domainMutationOperationKeys?: Set<string>;
 }): UntransformedOperationFinding[] {
-  const { workspacePath, semanticResult, records } = options;
+  const { workspacePath, semanticResult, records, domainMutationOperationKeys } = options;
   const rewrittenPositions = buildRewrittenPositions(records);
   const findings: UntransformedOperationFinding[] = [];
 
   for (const operation of semanticResult.operations) {
     if (isImportOperation(operation)) {
+      continue;
+    }
+
+    if (domainMutationOperationKeys?.has(operationKey(operation.file, operation.line))) {
       continue;
     }
 

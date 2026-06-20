@@ -53,7 +53,7 @@ describe('MVP funimas protect', () => {
     );
     const untouchedApp = await readFile(join(projectDir, 'src/App.tsx'), 'utf8');
 
-    expect(workspaceApp).toContain('Funimas.database.insert');
+    expect(workspaceApp).toContain("Funimas.domain.execute('createDemoUsers'");
     expect(untouchedApp).toBe(originalApp);
 
     await expect(

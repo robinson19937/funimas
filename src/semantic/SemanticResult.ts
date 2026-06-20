@@ -1,5 +1,6 @@
 import type { SemanticOperation } from './SemanticOperation.js';
 import type { SemanticOperationType } from './SemanticOperationType.js';
+import type { DomainMutation } from '../domain/DomainMutation.js';
 
 export interface SemanticResultData {
   operations: SemanticOperation[];
@@ -7,6 +8,7 @@ export interface SemanticResultData {
   operationsByType: Record<SemanticOperationType, number>;
   startedAt: Date;
   finishedAt: Date;
+  domainMutations?: DomainMutation[];
 }
 
 export class SemanticResult {
@@ -15,6 +17,7 @@ export class SemanticResult {
   readonly operationsByType: Record<SemanticOperationType, number>;
   readonly startedAt: Date;
   readonly finishedAt: Date;
+  readonly domainMutations: DomainMutation[];
 
   constructor(data: SemanticResultData) {
     this.operations = data.operations;
@@ -22,6 +25,7 @@ export class SemanticResult {
     this.operationsByType = data.operationsByType;
     this.startedAt = data.startedAt;
     this.finishedAt = data.finishedAt;
+    this.domainMutations = data.domainMutations ?? [];
   }
 
   get duration(): number {

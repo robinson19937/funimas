@@ -112,6 +112,9 @@ export function buildChangeReportViewModel(options: {
 }): ChangeReportViewModel {
   const { workspacePath, records, semanticResult, duration, finishedAt, funimasVersion, executionId } =
     options;
+  const domainMutationOperationKeys = new Set(
+    semanticResult.domainMutations.flatMap((mutation) => mutation.operationKeys),
+  );
 
   const rewriteRecords = records.filter(isCodeRewrite);
   const generatedRecords = records.filter(isGeneratedArtifact);
@@ -187,6 +190,7 @@ export function buildChangeReportViewModel(options: {
     workspacePath,
     semanticResult,
     records,
+    domainMutationOperationKeys,
   });
   const filesGenerated =
     generatedArtifacts.runtime.length +
