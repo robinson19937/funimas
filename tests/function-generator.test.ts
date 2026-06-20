@@ -102,6 +102,7 @@ describe('SDKGenerator', () => {
       join(workspacePath, 'sdk/database/DatabaseClient.ts'),
       'utf8',
     );
+    const domainClient = await readFile(join(workspacePath, 'sdk/domain/DomainClient.ts'), 'utf8');
 
     expect(sdkIndex).toContain("from './database/DatabaseClient.js'");
     expect(sdkIndex).toContain('export const Funimas');
@@ -113,7 +114,10 @@ describe('SDKGenerator', () => {
     expect(databaseClient).toContain('export class DatabaseClient');
     expect(databaseClient).toContain('insert(');
     expect(databaseClient).toContain('updateExistingDocument(');
+    expect(databaseClient).toContain('export function encodeFirestoreJson');
     expect(databaseClient).toContain('createQuerySnapshot');
+    expect(domainClient).toContain('encodeFirestoreJson(params)');
+    expect(browserSdk).toContain('encodeFirestoreJson(params)');
   });
 });
 

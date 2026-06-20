@@ -409,7 +409,7 @@ export class DomainClient {
         'Content-Type': 'application/json',
         Authorization: 'Bearer ' + token,
       },
-      body: JSON.stringify({ mutationId, params }),
+      body: JSON.stringify({ mutationId, params: encodeFirestoreJson(params) }),
     });
 
     const payload = await response.json().catch(() => ({

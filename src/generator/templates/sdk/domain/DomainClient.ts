@@ -1,5 +1,5 @@
 export function renderDomainClient(): string {
-  return `import { ApiError } from '../database/DatabaseClient.js';
+  return `import { ApiError, encodeFirestoreJson } from '../database/DatabaseClient.js';
 
 export type DomainExecuteParams = Record<string, unknown>;
 
@@ -31,7 +31,7 @@ export class DomainClient {
         'Content-Type': 'application/json',
         Authorization: 'Bearer ' + token,
       },
-      body: JSON.stringify({ mutationId, params }),
+      body: JSON.stringify({ mutationId, params: encodeFirestoreJson(params) }),
     });
 
     const payload = await response.json().catch(() => ({
