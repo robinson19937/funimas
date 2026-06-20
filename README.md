@@ -399,10 +399,9 @@ Login y registro **siguen en el cliente**. Si Funimas detecta `getAuth(app)`, co
 
 ### Aún sin transformación automática
 
-| API | Recomendación |
+| API | Comportamiento |
 | --- | ------------- |
-| `runTransaction` | Migrar a mutaciones del SDK o lógica en el servidor |
-| `writeBatch` | Reemplazar por operaciones individuales del SDK |
+| `runTransaction` / `writeBatch` | Se convierten automáticamente en `Funimas.domain.execute()` cuando la función tiene **2+ escrituras detectables** (incluye `snap.data().field ± param` vía `FieldValue.increment`). Lógica condicional arbitraria dentro del callback sigue requiriendo migración manual. |
 | Firebase Storage (`uploadBytes`, `getDownloadURL`, …) | Migración manual o futura versión de Funimas |
 
 Usa `funimas status` para ver el inventario exacto de tu proyecto.

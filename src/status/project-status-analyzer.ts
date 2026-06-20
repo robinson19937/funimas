@@ -1,5 +1,7 @@
 import { resolve } from 'node:path';
 
+import { CompositeWriteDetector } from '../domain/CompositeWriteDetector.js';
+import { operationKey } from '../domain/DomainMutation.js';
 import { GraphBuilder } from '../graph/GraphBuilder.js';
 import { AstParser } from '../parser/AstParser.js';
 import { ProjectScanner } from '../scanner/ProjectScanner.js';
@@ -16,6 +18,7 @@ export interface UnsupportedApiFinding {
   file: string;
   line: number;
   recommendation: string;
+  convertibleByDomainMutation?: boolean;
 }
 
 export interface ProjectStatusReport {
@@ -50,6 +53,10 @@ export class ProjectStatusAnalyzer {
     const firestoreSupported: Record<string, number> = {};
     const firestoreUnsupported: Record<string, number> = {};
     const unsupportedFindings: UnsupportedApiFinding[] = [];
+    const domainMutations = await new CompositeWriteDetector().detect(resolvedPath, semanticResult);
+    const convertibleOperationKeys = new Set(
+      domainMutations.flatMap((mutation) => mutation.operationKeys),
+    );
 
     for (const operation of firestoreOps) {
       const callee = this.getCallee(operation);
@@ -59,12 +66,18 @@ export class ProjectStatusAnalyzer {
       }
 
       if (operation.metadata.supported === false || !isSupportedFirestoreCallee(callee)) {
-        firestoreUnsupported[callee] = (firestoreUnsupported[callee] ?? 0) + 1;
+        const convertible = convertibleOperationKeys.has(operationKey(operation.file, operation.line));
+
+        if (!convertible) {
+          firestoreUnsupported[callee] = (firestoreUnsupported[callee] ?? 0) + 1;
+        }
+
         unsupportedFindings.push({
           callee,
           file: operation.file,
           line: operation.line,
           recommendation: getUnsupportedFirestoreRecommendation(callee),
+          convertibleByDomainMutation: convertible,
         });
         continue;
       }
@@ -79,10 +92,13 @@ export class ProjectStatusAnalyzer {
       .length;
 
     const blockers: string[] = [];
+    const blockingFindings = unsupportedFindings.filter(
+      (finding) => !finding.convertibleByDomainMutation,
+    );
 
-    if (unsupportedFindings.length > 0) {
+    if (blockingFindings.length > 0) {
       blockers.push(
-        `${unsupportedFindings.length} uso(s) de APIs Firestore no soportadas por Funimas`,
+        `${blockingFindings.length} uso(s) de APIs Firestore no soportadas por Funimas`,
       );
     }
 

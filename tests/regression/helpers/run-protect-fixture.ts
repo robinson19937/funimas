@@ -121,6 +121,29 @@ export const REGRESSION_FIXTURES: RegressionFixtureDefinition[] = [
           includes: ["Funimas.domain.execute('transferCredits'"],
           excludes: ['runTransaction'],
         },
+        {
+          file: 'runtime/domain/mutations.ts',
+          includes: ['"increment"', '"param": "amount"', '"sign": -1', '"sign": 1'],
+          excludes: ['$fromSnap.data().balance'],
+        },
+      ],
+    },
+  },
+  {
+    id: 'unsupported-batch',
+    description: 'Proyecto con writeBatch se convierte en mutación de dominio atómica',
+    sourcePath: join(regressionRoot, 'fixtures', 'unsupported-batch'),
+    expectations: {
+      success: true,
+      validationValid: true,
+      verificationReady: true,
+      operationsUntransformed: 0,
+      contentAssertions: [
+        {
+          file: 'app.js',
+          includes: ["Funimas.domain.execute('syncUserProfile'"],
+          excludes: ['writeBatch', 'batch.commit'],
+        },
       ],
     },
   },

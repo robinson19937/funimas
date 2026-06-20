@@ -15,9 +15,9 @@ export const UNSUPPORTED_FIRESTORE_CALLEES = [
 
 const UNSUPPORTED_RECOMMENDATIONS: Record<string, string> = {
   runTransaction:
-    'Migrar a mutaciones del SDK Funimas o lógica de dominio en el servidor (Admin SDK).',
+    'Funimas puede convertir funciones con múltiples escrituras en Funimas.domain.execute() si las escrituras son detectables estáticamente.',
   writeBatch:
-    'Reemplazar por llamadas individuales al SDK Funimas o una mutación de dominio en el servidor.',
+    'Funimas puede convertir funciones con writeBatch y múltiples escrituras en Funimas.domain.execute().',
 };
 
 export function isSupportedFirestoreCallee(callee: string): boolean {

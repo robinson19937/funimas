@@ -74,8 +74,32 @@ export function resolveTemplateValue(value: unknown, params: Record<string, unkn
   }
 
   if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+
+    if (record.__funimasFirestoreSentinel === 'increment') {
+      const amount = record.amount;
+
+      if (
+        amount &&
+        typeof amount === 'object' &&
+        'param' in amount &&
+        typeof (amount as { param: string }).param === 'string'
+      ) {
+        const spec = amount as { param: string; sign?: number };
+        const sign = spec.sign === -1 ? -1 : 1;
+        const resolved = Number(params[spec.param] ?? 0);
+
+        return {
+          __funimasFirestoreSentinel: 'increment',
+          amount: sign * resolved,
+        };
+      }
+
+      return record;
+    }
+
     return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, resolveTemplateValue(entry, params)]),
+      Object.entries(record).map(([key, entry]) => [key, resolveTemplateValue(entry, params)]),
     );
   }
 
