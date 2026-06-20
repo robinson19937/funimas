@@ -1,4 +1,4 @@
-import { SyntaxKind, type SourceFile, type FunctionDeclaration, type FunctionExpression } from 'ts-morph';
+import { Node, SyntaxKind, type SourceFile, type FunctionDeclaration, type FunctionExpression, type Statement } from 'ts-morph';
 
 import { TsMorphProjectLoader } from '../parser/TsMorphProjectLoader.js';
 import type { TransformationHistory } from '../history/TransformationHistory.js';
@@ -28,15 +28,32 @@ export class DomainMutationApplicator {
 
     const project = await this.loader.load(workspacePath);
     const modifiedFiles = new Set<string>();
+    const sortedMutations = [...mutations].sort((left, right) => {
+      const scopeRank = (mutation: DomainMutation): number =>
+        mutation.replacementScope === 'statement-range' ? 0 : 1;
+      const scopeDiff = scopeRank(left) - scopeRank(right);
 
-    for (const mutation of mutations) {
+      if (scopeDiff !== 0) {
+        return scopeDiff;
+      }
+
+      const leftLine = left.statementStartLine ?? left.startLine;
+      const rightLine = right.statementStartLine ?? right.startLine;
+
+      return rightLine - leftLine;
+    });
+
+    for (const mutation of sortedMutations) {
       const sourceFile = project.getSourceFile(mutation.file);
 
       if (!sourceFile) {
         continue;
       }
 
-      const applied = this.rewriteMutationFunction(sourceFile, mutation);
+      const applied =
+        mutation.replacementScope === 'statement-range'
+          ? this.rewriteStatementRange(sourceFile, mutation)
+          : this.rewriteMutationFunction(sourceFile, mutation);
 
       if (!applied) {
         continue;
@@ -75,7 +92,7 @@ export class DomainMutationApplicator {
 
     return {
       modifiedFiles: [...modifiedFiles],
-      mutationsApplied: mutations.length,
+      mutationsApplied: sortedMutations.length,
     };
   }
 
@@ -140,5 +157,102 @@ export class DomainMutationApplicator {
 
     const paramsObject = mutation.invokeParams.length ? `{ ${mutation.invokeParams.join(', ')} }` : '{}';
     arrow.setBodyText(`await Funimas.domain.execute('${mutation.id}', ${paramsObject});`);
+  }
+
+  private rewriteStatementRange(sourceFile: SourceFile, mutation: DomainMutation): boolean {
+    const startLine = mutation.statementStartLine;
+    const endLine = mutation.statementEndLine;
+
+    if (startLine === undefined || endLine === undefined) {
+      return false;
+    }
+
+    const writeLines = new Set(
+      mutation.operationKeys
+        .map((key) => Number(key.split(':').at(-1)))
+        .filter((line) => Number.isFinite(line)),
+    );
+    const statementsToReplace: Statement[] = [];
+
+    sourceFile.forEachDescendant((node) => {
+      if (!Node.isStatement(node)) {
+        return;
+      }
+
+      if (!this.isStatementInsideAnonymousCallback(node, mutation.startLine)) {
+        return;
+      }
+
+      if (!this.statementContainsWriteLine(node, writeLines)) {
+        return;
+      }
+
+      const statementStart = node.getStartLineNumber();
+
+      if (statementStart < startLine || statementStart > endLine) {
+        return;
+      }
+
+      statementsToReplace.push(node);
+    });
+
+    if (statementsToReplace.length === 0) {
+      return false;
+    }
+
+    const paramsObject = mutation.invokeParams.length
+      ? `{ ${mutation.invokeParams.join(', ')} }`
+      : '{}';
+    const replacement = `await Funimas.domain.execute('${mutation.id}', ${paramsObject});`;
+
+    statementsToReplace[0].replaceWithText(replacement);
+
+    for (let index = 1; index < statementsToReplace.length; index += 1) {
+      statementsToReplace[index]?.remove();
+    }
+
+    return true;
+  }
+
+  private isStatementInsideAnonymousCallback(node: Node, callbackStartLine: number): boolean {
+    let current: Node | undefined = node;
+
+    while (current) {
+      if (
+        current.getKind() === SyntaxKind.ArrowFunction ||
+        current.getKind() === SyntaxKind.FunctionExpression
+      ) {
+        return current.getStartLineNumber() === callbackStartLine;
+      }
+
+      current = current.getParent();
+    }
+
+    return false;
+  }
+
+  private statementContainsWriteLine(statement: Statement, writeLines: Set<number>): boolean {
+    let found = false;
+
+    statement.forEachDescendant((node) => {
+      if (node.getKind() !== SyntaxKind.CallExpression) {
+        return;
+      }
+
+      const callExpression = node.asKindOrThrow(SyntaxKind.CallExpression);
+      const calleeText = callExpression.getExpression().getText();
+      const isWrite =
+        calleeText === 'setDoc' ||
+        calleeText === 'addDoc' ||
+        calleeText === 'updateDoc' ||
+        calleeText === 'deleteDoc' ||
+        /^(\w+)\.(set|update|delete)$/.test(calleeText);
+
+      if (isWrite && writeLines.has(callExpression.getStartLineNumber())) {
+        found = true;
+      }
+    });
+
+    return found;
   }
 }

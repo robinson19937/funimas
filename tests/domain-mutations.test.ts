@@ -133,4 +133,30 @@ export async function transferCredits(fromId, toId, amount) {
       buildIncrementSentinel({ param: 'amount', sign: 1 }),
     );
   });
+
+  it('detecta setDoc múltiples en callback de addEventListener', async () => {
+    const projectDir = await createProject(`import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { db } from './firebase.js';
+
+document.getElementById('loginBtn')?.addEventListener('click', async () => {
+  const uid = 'user-1';
+  const companyId = 'acme-user-1';
+  const email = 'demo@example.com';
+  const businessName = 'Mi empresa';
+  const timestamp = serverTimestamp();
+
+  await setDoc(doc(db, 'users', uid), { companyId, email, createdAt: timestamp });
+  await setDoc(doc(db, 'companies', companyId), { name: businessName, ownerUid: uid }, { merge: true });
+  await setDoc(doc(db, 'companies', companyId, 'settings', 'main'), { businessName, companyId, email }, { merge: true });
+});
+`);
+
+    const detector = new CompositeWriteDetector();
+    const mutations = await detector.detect(projectDir, createSemanticResult());
+
+    expect(mutations).toHaveLength(1);
+    expect(mutations[0]?.id).toBe('registerCompany');
+    expect(mutations[0]?.replacementScope).toBe('statement-range');
+    expect(mutations[0]?.writes).toHaveLength(3);
+  });
 });
