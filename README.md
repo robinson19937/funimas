@@ -213,6 +213,16 @@ Valida:
 - `npm run build` en el workspace (salvo `--skip-build`)
 - Preparación para despliegue (`.env`, `netlify.toml`) cuando no se omite
 
+### Smoke test (workspace ya protegido)
+
+Prueba funcional con emuladores Firebase y llamadas reales al runtime generado:
+
+```bash
+node scripts/smoke-test-protected-workspace.mjs ./mi-proyecto_funimas
+```
+
+Comprueba assets estáticos, que `/api/read` no colisione con rutas de clubs, rechazo 401 sin token, e inserción/listado autenticados contra emuladores.
+
 ### `funimas deploy`
 
 ```bash
@@ -229,6 +239,50 @@ funimas deploy ./mi-proyecto_funimas --dry-run --prod
 | `--dry-run` | Muestra los comandos sin ejecutarlos |
 | `--skip-firestore` | Omite el deploy de reglas Firebase |
 | `--skip-netlify` | Omite `netlify deploy` |
+
+---
+
+## Checklist antes de desplegar
+
+Usa esta secuencia después de `funimas protect` y antes de publicar el workspace `_funimas`:
+
+```bash
+# 1. Analizar el proyecto original (opcional)
+funimas status ./mi-proyecto
+
+# 2. Proteger (regenera runtime, sdk y functions)
+funimas protect ./mi-proyecto --force
+
+# 3. Verificación estructural + build TypeScript
+funimas verify ./mi-proyecto_funimas --skip-deploy-readiness
+
+# 4. Smoke test funcional (emuladores + API /api/*)
+node scripts/smoke-test-protected-workspace.mjs ./mi-proyecto_funimas
+
+# 5. Probar en local con functions (login real en navegador)
+cd mi-proyecto_funimas
+cp .env.example .env    # credenciales Firebase Admin
+npm install
+npx netlify-cli@latest dev
+
+# 6. Revisar operaciones pendientes
+cat .funimas/reports/summary.json   # operationsUntransformed debe ser 0 o aceptable
+
+# 7. Desplegar
+funimas deploy . --import-env --prod
+```
+
+| Paso | Qué confirma |
+| ---- | ------------- |
+| `funimas status` | APIs convertibles vs bloqueantes en el código original |
+| `funimas protect` | Workspace `_funimas` generado sin errores de validación |
+| `funimas verify` | TypeScript, imports, runtime y operaciones sin transformar |
+| Smoke test | `/api/read`, `/api/insert`, `/api/list` responden con token válido |
+| `netlify dev` | Login Firebase Auth + flujo UI real en el navegador |
+| `summary.json` | Métricas finales y archivos generados |
+| `funimas deploy` | Reglas Firestore + sitio Netlify en producción |
+
+Si `operationsUntransformed` > 0, revisa `.funimas/reports/changes.html` antes de desplegar con reglas estrictas.
 
 ---
 
@@ -288,10 +342,26 @@ npx netlify-cli@latest link    # vincular al sitio Netlify existente
 **6. Verificar**
 
 ```bash
-funimas deploy . --check
+funimas verify . --skip-deploy-readiness
 ```
 
-**7. Desplegar**
+Smoke test (desde la raíz del repo Funimas, no dentro del workspace):
+
+```bash
+node scripts/smoke-test-protected-workspace.mjs "$(pwd)"
+```
+
+Si estás en `mi-proyecto_funimas`, `$(pwd)` apunta al workspace correcto.
+
+**7. Probar en local (opcional, recomendado)**
+
+```bash
+npx netlify-cli@latest dev
+```
+
+Abre `/login.html`, inicia sesión y valida en DevTools que las operaciones CRUD llaman a `/api/*` con `Authorization: Bearer …`.
+
+**8. Desplegar**
 
 ```bash
 funimas deploy . --import-env --prod

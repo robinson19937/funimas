@@ -138,7 +138,7 @@ export async function routeHttpRequest(request: HttpRequest): Promise<HttpRespon
       return jsonResponse(result.success ? 201 : 400, result);
     }
 
-    if (method === 'POST' && path.endsWith('/read')) {
+    if (method === 'POST' && path.startsWith('/api/clubs/') && path.endsWith('/read')) {
       const clubId = parseClubIdFromPath(path, '/read');
       if (!clubId) {
         return jsonResponse(404, { success: false, message: 'Ruta no encontrada.' });
@@ -159,7 +159,7 @@ export async function routeHttpRequest(request: HttpRequest): Promise<HttpRespon
       return jsonResponse(result.success ? 200 : 404, result);
     }
 
-    if (method === 'POST' && path.endsWith('/mutate')) {
+    if (method === 'POST' && path.startsWith('/api/clubs/') && path.endsWith('/mutate')) {
       const clubId = parseClubIdFromPath(path, '/mutate');
       if (!clubId) {
         return jsonResponse(404, { success: false, message: 'Ruta no encontrada.' });
