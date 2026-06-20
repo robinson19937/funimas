@@ -19,6 +19,18 @@ describe('runtime write semantics', () => {
     expect(router).toContain('updateDocumentByPath');
   });
 
+  it('no deja que las rutas de clubs capturen /api/read ni /api/list genéricos', async () => {
+    const engine = new RuntimeTemplateEngine();
+    const router = await engine.render('runtime/router.hbs', {
+      collections: ['companies', 'users', 'cotizaciones'],
+    });
+
+    expect(router).toContain("path.startsWith('/api/clubs/') && path.endsWith('/read')");
+    expect(router).toContain("path.startsWith('/api/clubs/') && path.endsWith('/mutate')");
+    expect(router).toContain("path === '/api/read'");
+    expect(router).toContain("path === '/api/list'");
+  });
+
   it('documenta el fallo explícito al actualizar documentos inexistentes', async () => {
     const engine = new RuntimeTemplateEngine();
     const repository = await engine.render('runtime/repositories/firestoreRepository.hbs');
