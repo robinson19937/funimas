@@ -148,6 +148,32 @@ export const REGRESSION_FIXTURES: RegressionFixtureDefinition[] = [
     },
   },
   {
+    id: 'auth-bootstrap-reads',
+    description: 'Funciones con getDoc condicional no se reemplazan por mutación de dominio completa',
+    sourcePath: join(regressionRoot, 'fixtures', 'auth-bootstrap-reads'),
+    expectations: {
+      success: true,
+      validationValid: true,
+      verificationReady: true,
+      contentAssertions: [
+        {
+          file: 'js/auth.js',
+          includes: [
+            'bootstrapMissingCompanyData',
+            'if (!userSnap.exists())',
+            'if (!companySnap.exists())',
+          ],
+          excludes: ["Funimas.domain.execute('bootstrapMissingCompanyData'"],
+        },
+        {
+          file: 'runtime/domain/mutations.ts',
+          includes: ['DOMAIN_MUTATIONS'],
+          excludes: ['"bootstrapMissingCompanyData"'],
+        },
+      ],
+    },
+  },
+  {
     id: 'auth-register-listener',
     description: 'Registro multi-documento dentro de addEventListener se convierte en mutación de dominio',
     sourcePath: join(regressionRoot, 'fixtures', 'auth-register-listener'),
