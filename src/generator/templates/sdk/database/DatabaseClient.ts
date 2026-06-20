@@ -87,7 +87,7 @@ function getIncrementAmount(value: unknown): number {
   return 1;
 }
 
-function encodeFirestoreJson(value: unknown): unknown {
+export function encodeFirestoreJson(value: unknown): unknown {
   if (isServerTimestampValue(value)) {
     return { [FIRESTORE_SENTINEL_KEY]: 'serverTimestamp' };
   }

@@ -97,6 +97,10 @@ export class CompositeWriteDetector {
           continue;
         }
 
+        if (this.functionHasFirestoreReads(candidate, handles)) {
+          continue;
+        }
+
         const operationKeys = writes.map((write) =>
           operationKey(sourceFile.getFilePath(), write.line),
         );
@@ -347,6 +351,43 @@ export class CompositeWriteDetector {
     }
 
     return invokeParams;
+  }
+
+  private functionHasFirestoreReads(
+    candidate: FunctionCandidate,
+    handles: WriteHandles,
+  ): boolean {
+    if (!candidate.body) {
+      return false;
+    }
+
+    let hasReads = false;
+
+    candidate.body.forEachDescendant((node) => {
+      if (node.getKind() !== SyntaxKind.CallExpression) {
+        return;
+      }
+
+      const callExpression = node.asKindOrThrow(SyntaxKind.CallExpression);
+      const calleeText = callExpression.getExpression().getText();
+
+      if (calleeText === 'getDoc' || calleeText === 'getDocs') {
+        hasReads = true;
+        return;
+      }
+
+      const transactionGet = /^(\w+)\.get$/.exec(calleeText);
+
+      if (transactionGet) {
+        const handleName = transactionGet[1] ?? '';
+
+        if (!handles.transaction.has(handleName) && !handles.batch.has(handleName)) {
+          hasReads = true;
+        }
+      }
+    });
+
+    return hasReads;
   }
 
   private collectWriteHandles(candidate: FunctionCandidate): WriteHandles {

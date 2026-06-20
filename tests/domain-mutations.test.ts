@@ -184,4 +184,35 @@ document.getElementById('loginBtn')?.addEventListener('click', async () => {
       email: '$email',
     });
   });
+
+  it('no convierte funciones con lecturas Firestore condicionales (getDoc)', async () => {
+    const projectDir = await createProject(`import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { db } from './firebase.js';
+
+async function bootstrapMissingCompanyData({ uid, email }) {
+  const timestamp = serverTimestamp();
+  const companyId = 'company-1';
+  const userRef = doc(db, 'users', uid);
+  const companyRef = doc(db, 'companies', companyId);
+
+  const [userSnap, companySnap] = await Promise.all([getDoc(userRef), getDoc(companyRef)]);
+
+  if (!userSnap.exists()) {
+    await setDoc(userRef, { email, companyId, createdAt: timestamp });
+  }
+
+  if (!companySnap.exists()) {
+    await setDoc(companyRef, { name: 'Mi empresa', ownerUid: uid }, { merge: true });
+    await setDoc(doc(db, 'companies', companyId, 'settings', 'main'), { companyId }, { merge: true });
+  }
+
+  return companyId;
+}
+`);
+
+    const detector = new CompositeWriteDetector();
+    const mutations = await detector.detect(projectDir, createSemanticResult());
+
+    expect(mutations).toHaveLength(0);
+  });
 });
