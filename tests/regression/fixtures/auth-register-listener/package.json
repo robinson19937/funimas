@@ -1,0 +1,5 @@
+{
+  "name": "auth-register-listener-fixture",
+  "private": true,
+  "type": "module"
+}

@@ -29,6 +29,10 @@ import {
   collectParamNames,
   segmentArgsToPathTemplate,
 } from './write-template-builder.js';
+import {
+  findWriteClustersInBlock,
+  inferAnonymousMutationId,
+} from './write-cluster-utils.js';
 
 interface FunctionCandidate {
   name: string;
@@ -71,6 +75,28 @@ export class CompositeWriteDetector {
           continue;
         }
 
+        if (candidate.name.startsWith('anonymous_')) {
+          const writeLineSet = new Set(writes.map((entry) => entry.line));
+          const clusters = this.findWriteClusters(candidate, writeLineSet);
+
+          for (const cluster of clusters) {
+            if (cluster.length < 2) {
+              continue;
+            }
+
+            mutations.push(
+              this.buildMutation({
+                sourceFile,
+                candidate,
+                cluster,
+                replacementScope: 'statement-range',
+              }),
+            );
+          }
+
+          continue;
+        }
+
         const operationKeys = writes.map((write) =>
           operationKey(sourceFile.getFilePath(), write.line),
         );
@@ -110,6 +136,7 @@ export class CompositeWriteDetector {
           params,
           writes: domainWrites,
           operationKeys,
+          replacementScope: 'function',
         });
       }
     }
@@ -156,7 +183,131 @@ export class CompositeWriteDetector {
       }
     }
 
+    sourceFile.forEachDescendant((node) => {
+      if (node.getKind() !== SyntaxKind.CallExpression) {
+        return;
+      }
+
+      const callExpression = node.asKindOrThrow(SyntaxKind.CallExpression);
+      const expression = callExpression.getExpression();
+
+      if (expression.getKind() !== SyntaxKind.PropertyAccessExpression) {
+        return;
+      }
+
+      const propertyAccess = expression.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
+
+      if (propertyAccess.getName() !== 'addEventListener') {
+        return;
+      }
+
+      const callback = callExpression.getArguments()[1];
+
+      if (
+        !callback ||
+        (callback.getKind() !== SyntaxKind.ArrowFunction &&
+          callback.getKind() !== SyntaxKind.FunctionExpression)
+      ) {
+        return;
+      }
+
+      const functionLike =
+        callback.getKind() === SyntaxKind.ArrowFunction
+          ? callback.asKindOrThrow(SyntaxKind.ArrowFunction)
+          : callback.asKindOrThrow(SyntaxKind.FunctionExpression);
+
+      const callbackName = `anonymous_${functionLike.getStartLineNumber()}`;
+
+      if (candidates.some((candidate) => candidate.name === callbackName)) {
+        return;
+      }
+
+      const invokeParams = this.extractInvokeParams(functionLike.getParameters());
+
+      candidates.push({
+        name: callbackName,
+        params: [...invokeParams],
+        invokeParams,
+        body: functionLike.getBody(),
+        startLine: functionLike.getStartLineNumber(),
+        filePath: sourceFile.getFilePath(),
+      });
+    });
+
     return candidates;
+  }
+
+  private findWriteClusters(
+    candidate: FunctionCandidate,
+    writeLines: Set<number>,
+  ): DetectedWrite[][] {
+    if (!candidate.body || candidate.body.getKind() !== SyntaxKind.Block) {
+      return [];
+    }
+
+    const writesByLine = new Map<number, DetectedWrite>();
+    const handles = this.collectWriteHandles(candidate);
+    const allWrites = this.collectWrites(candidate, handles);
+
+    for (const write of allWrites) {
+      writesByLine.set(write.line, write);
+    }
+
+    const clusters: DetectedWrite[][] = [];
+    const rootBlock = candidate.body.asKindOrThrow(SyntaxKind.Block);
+
+    for (const cluster of findWriteClustersInBlock(rootBlock, writeLines)) {
+      const entries = cluster.lines
+        .map((line) => writesByLine.get(line))
+        .filter((entry): entry is DetectedWrite => entry !== undefined);
+
+      if (entries.length >= 2) {
+        clusters.push(entries);
+      }
+    }
+
+    return clusters;
+  }
+
+  private buildMutation(options: {
+    sourceFile: SourceFile;
+    candidate: FunctionCandidate;
+    cluster: DetectedWrite[];
+    replacementScope: 'function' | 'statement-range';
+  }): DomainMutation {
+    const { sourceFile, candidate, cluster, replacementScope } = options;
+    const clusterLines = cluster.map((entry) => entry.line);
+    const domainWrites = cluster.map((entry) => entry.write);
+    const operationKeys = clusterLines.map((line) => operationKey(sourceFile.getFilePath(), line));
+    const params: string[] = [];
+    const invokeParams: string[] = [];
+
+    for (const write of domainWrites) {
+      for (const segment of write.path) {
+        if (typeof segment === 'object' && !params.includes(segment.param)) {
+          params.push(segment.param);
+        }
+      }
+
+      collectParamNames(params, write.dataTemplate);
+    }
+
+    invokeParams.push(...params);
+
+    return {
+      id: inferAnonymousMutationId(domainWrites, clusterLines[0] ?? candidate.startLine),
+      file: sourceFile.getFilePath(),
+      functionName: candidate.name,
+      startLine: candidate.startLine,
+      invokeParams,
+      params,
+      writes: domainWrites,
+      operationKeys,
+      replacementScope,
+      statementStartLine: replacementScope === 'statement-range' ? clusterLines[0] : undefined,
+      statementEndLine:
+        replacementScope === 'statement-range' ? clusterLines[clusterLines.length - 1] : undefined,
+    };
   }
 
   private toFunctionCandidate(

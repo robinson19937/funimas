@@ -147,6 +147,24 @@ export const REGRESSION_FIXTURES: RegressionFixtureDefinition[] = [
       ],
     },
   },
+  {
+    id: 'auth-register-listener',
+    description: 'Registro multi-documento dentro de addEventListener se convierte en mutación de dominio',
+    sourcePath: join(regressionRoot, 'fixtures', 'auth-register-listener'),
+    expectations: {
+      success: true,
+      validationValid: true,
+      verificationReady: true,
+      operationsUntransformed: 0,
+      contentAssertions: [
+        {
+          file: 'js/auth.js',
+          includes: ["Funimas.domain.execute('registerCompany'"],
+          excludes: ['setDoc(doc(db, \'users\'', 'merge: true'],
+        },
+      ],
+    },
+  },
 ];
 
 export async function runProtectFixture(

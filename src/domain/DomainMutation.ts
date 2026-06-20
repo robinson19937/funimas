@@ -8,6 +8,8 @@ export interface DomainWrite {
   dataTemplate?: Record<string, unknown>;
 }
 
+export type DomainMutationReplacementScope = 'function' | 'statement-range';
+
 export interface DomainMutation {
   id: string;
   file: string;
@@ -17,6 +19,9 @@ export interface DomainMutation {
   params: string[];
   writes: DomainWrite[];
   operationKeys: string[];
+  replacementScope: DomainMutationReplacementScope;
+  statementStartLine?: number;
+  statementEndLine?: number;
 }
 
 export function operationKey(file: string, line: number): string {
