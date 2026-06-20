@@ -1,6 +1,30 @@
 import { SyntaxKind, type Node } from 'ts-morph';
 
 const SERVER_TIMESTAMP_SENTINEL = { __funimasFirestoreSentinel: 'serverTimestamp' };
+const INCREMENT_SENTINEL_KEY = '__funimasFirestoreSentinel';
+
+export interface IncrementAmountSpec {
+  param: string;
+  sign: 1 | -1;
+}
+
+export function isIncrementAmountSpec(value: unknown): value is IncrementAmountSpec {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'param' in value &&
+    typeof (value as IncrementAmountSpec).param === 'string' &&
+    'sign' in value &&
+    ((value as IncrementAmountSpec).sign === 1 || (value as IncrementAmountSpec).sign === -1)
+  );
+}
+
+export function buildIncrementSentinel(amount: number | IncrementAmountSpec): Record<string, unknown> {
+  return {
+    [INCREMENT_SENTINEL_KEY]: 'increment',
+    amount,
+  };
+}
 
 export function buildDataTemplate(node: Node | undefined): Record<string, unknown> | undefined {
   if (!node) {
@@ -57,6 +81,15 @@ function buildTemplateValue(node: Node): unknown {
       return `$${node.getText()}`;
     case SyntaxKind.PropertyAccessExpression:
       return `$${node.getText()}`;
+    case SyntaxKind.BinaryExpression: {
+      const increment = buildReadDependentIncrement(node);
+
+      if (increment !== undefined) {
+        return increment;
+      }
+
+      return `$${node.getText()}`;
+    }
     case SyntaxKind.ObjectLiteralExpression:
       return buildObjectTemplate(node);
     case SyntaxKind.ArrayLiteralExpression:
@@ -76,6 +109,58 @@ function buildTemplateValue(node: Node): unknown {
     default:
       return `$${node.getText()}`;
   }
+}
+
+function buildReadDependentIncrement(node: Node): Record<string, unknown> | undefined {
+  const binary = node.asKindOrThrow(SyntaxKind.BinaryExpression);
+  const operator = binary.getOperatorToken().getKind();
+
+  if (operator !== SyntaxKind.PlusToken && operator !== SyntaxKind.MinusToken) {
+    return undefined;
+  }
+
+  const left = binary.getLeft();
+  const right = binary.getRight();
+
+  if (!isSnapshotFieldRead(left)) {
+    return undefined;
+  }
+
+  const sign: 1 | -1 = operator === SyntaxKind.PlusToken ? 1 : -1;
+
+  if (right.getKind() === SyntaxKind.Identifier) {
+    return buildIncrementSentinel({
+      param: right.getText(),
+      sign,
+    });
+  }
+
+  if (right.getKind() === SyntaxKind.NumericLiteral) {
+    return buildIncrementSentinel(sign * Number(right.getText()));
+  }
+
+  return undefined;
+}
+
+function isSnapshotFieldRead(node: Node): boolean {
+  if (node.getKind() !== SyntaxKind.PropertyAccessExpression) {
+    return false;
+  }
+
+  const propertyAccess = node.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
+  const expression = propertyAccess.getExpression();
+
+  if (expression.getKind() !== SyntaxKind.CallExpression) {
+    return false;
+  }
+
+  const callExpression = expression.asKindOrThrow(SyntaxKind.CallExpression);
+  const callee = callExpression.getExpression();
+
+  return (
+    callee.getKind() === SyntaxKind.PropertyAccessExpression &&
+    callee.asKindOrThrow(SyntaxKind.PropertyAccessExpression).getName() === 'data'
+  );
 }
 
 export function segmentArgsToPathTemplate(segmentArgs: string[]): string[] {
@@ -104,6 +189,14 @@ export function collectParamNames(params: string[], template: unknown): void {
     return;
   }
 
+  if (isIncrementAmountSpec(template)) {
+    if (!params.includes(template.param)) {
+      params.push(template.param);
+    }
+
+    return;
+  }
+
   if (Array.isArray(template)) {
     for (const entry of template) {
       collectParamNames(params, entry);
@@ -113,6 +206,16 @@ export function collectParamNames(params: string[], template: unknown): void {
   }
 
   if (template && typeof template === 'object') {
+    const record = template as Record<string, unknown>;
+
+    if (record[INCREMENT_SENTINEL_KEY] === 'increment' && isIncrementAmountSpec(record.amount)) {
+      if (!params.includes(record.amount.param)) {
+        params.push(record.amount.param);
+      }
+
+      return;
+    }
+
     for (const value of Object.values(template)) {
       collectParamNames(params, value);
     }

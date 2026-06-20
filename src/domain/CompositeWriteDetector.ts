@@ -45,6 +45,11 @@ interface DetectedWrite {
   write: DomainWrite;
 }
 
+interface WriteHandles {
+  transaction: Set<string>;
+  batch: Set<string>;
+}
+
 export class CompositeWriteDetector {
   async detect(workspacePath: string, _semanticResult: SemanticResult): Promise<DomainMutation[]> {
     const resolvedWorkspace = resolve(workspacePath);
@@ -59,7 +64,8 @@ export class CompositeWriteDetector {
       }
 
       for (const candidate of this.collectFunctionCandidates(sourceFile)) {
-        const writes = this.collectWrites(candidate);
+        const handles = this.collectWriteHandles(candidate);
+        const writes = this.collectWrites(candidate, handles);
 
         if (writes.length < 2) {
           continue;
@@ -71,6 +77,14 @@ export class CompositeWriteDetector {
 
         for (const runTransactionLine of this.findRunTransactionLines(candidate)) {
           operationKeys.push(operationKey(sourceFile.getFilePath(), runTransactionLine));
+        }
+
+        for (const writeBatchLine of this.findWriteBatchLines(candidate)) {
+          operationKeys.push(operationKey(sourceFile.getFilePath(), writeBatchLine));
+        }
+
+        for (const commitLine of this.findBatchCommitLines(candidate, handles.batch)) {
+          operationKeys.push(operationKey(sourceFile.getFilePath(), commitLine));
         }
 
         const invokeParams = [...candidate.invokeParams];
@@ -111,8 +125,6 @@ export class CompositeWriteDetector {
     }
 
     for (const statement of sourceFile.getVariableStatements()) {
-      const isExported = statement.isExported();
-
       for (const declaration of statement.getDeclarations()) {
         const initializer = declaration.getInitializer();
 
@@ -140,10 +152,6 @@ export class CompositeWriteDetector {
             startLine: declaration.getStartLineNumber(),
             filePath: sourceFile.getFilePath(),
           });
-        }
-
-        if (!isExported && declaration.getName()) {
-          // local functions are still candidates
         }
       }
     }
@@ -190,7 +198,66 @@ export class CompositeWriteDetector {
     return invokeParams;
   }
 
-  private collectWrites(candidate: FunctionCandidate): DetectedWrite[] {
+  private collectWriteHandles(candidate: FunctionCandidate): WriteHandles {
+    const transaction = new Set<string>(['transaction']);
+    const batch = new Set<string>();
+
+    if (!candidate.body) {
+      return { transaction, batch };
+    }
+
+    candidate.body.forEachDescendant((node) => {
+      if (node.getKind() === SyntaxKind.CallExpression) {
+        const callExpression = node.asKindOrThrow(SyntaxKind.CallExpression);
+
+        if (callExpression.getExpression().getText() === 'runTransaction') {
+          const callback = callExpression.getArguments()[1];
+
+          if (callback) {
+            const handleName = this.getCallbackParameterName(callback);
+
+            if (handleName) {
+              transaction.add(handleName);
+            }
+          }
+        }
+      }
+
+      if (node.getKind() === SyntaxKind.VariableDeclaration) {
+        const declaration = node.asKindOrThrow(SyntaxKind.VariableDeclaration);
+        const initializer = declaration.getInitializer();
+
+        if (
+          initializer &&
+          initializer.getKind() === SyntaxKind.CallExpression &&
+          initializer.asKindOrThrow(SyntaxKind.CallExpression).getExpression().getText() ===
+            'writeBatch'
+        ) {
+          const name = declaration.getName();
+
+          if (name) {
+            batch.add(name);
+          }
+        }
+      }
+    });
+
+    return { transaction, batch };
+  }
+
+  private getCallbackParameterName(callback: Node): string | undefined {
+    if (callback.getKind() === SyntaxKind.ArrowFunction) {
+      return callback.asKindOrThrow(SyntaxKind.ArrowFunction).getParameters()[0]?.getName();
+    }
+
+    if (callback.getKind() === SyntaxKind.FunctionExpression) {
+      return callback.asKindOrThrow(SyntaxKind.FunctionExpression).getParameters()[0]?.getName();
+    }
+
+    return undefined;
+  }
+
+  private collectWrites(candidate: FunctionCandidate, handles: WriteHandles): DetectedWrite[] {
     if (!candidate.body) {
       return [];
     }
@@ -203,7 +270,7 @@ export class CompositeWriteDetector {
       }
 
       const callExpression = node.asKindOrThrow(SyntaxKind.CallExpression);
-      const detected = this.extractWrite(callExpression);
+      const detected = this.extractWrite(callExpression, handles);
 
       if (!detected) {
         return;
@@ -241,7 +308,57 @@ export class CompositeWriteDetector {
     return lines;
   }
 
-  private extractWrite(callExpression: CallExpression): DomainWrite | null {
+  private findWriteBatchLines(candidate: FunctionCandidate): number[] {
+    if (!candidate.body) {
+      return [];
+    }
+
+    const lines: number[] = [];
+
+    candidate.body.forEachDescendant((node) => {
+      if (node.getKind() !== SyntaxKind.CallExpression) {
+        return;
+      }
+
+      const callExpression = node.asKindOrThrow(SyntaxKind.CallExpression);
+
+      if (callExpression.getExpression().getText() === 'writeBatch') {
+        lines.push(callExpression.getStartLineNumber());
+      }
+    });
+
+    return lines;
+  }
+
+  private findBatchCommitLines(candidate: FunctionCandidate, batchHandles: Set<string>): number[] {
+    if (!candidate.body || batchHandles.size === 0) {
+      return [];
+    }
+
+    const lines: number[] = [];
+
+    candidate.body.forEachDescendant((node) => {
+      if (node.getKind() !== SyntaxKind.CallExpression) {
+        return;
+      }
+
+      const callExpression = node.asKindOrThrow(SyntaxKind.CallExpression);
+      const calleeText = callExpression.getExpression().getText();
+      const memberMatch = /^(\w+)\.commit$/.exec(calleeText);
+
+      if (!memberMatch) {
+        return;
+      }
+
+      if (batchHandles.has(memberMatch[1] ?? '')) {
+        lines.push(callExpression.getStartLineNumber());
+      }
+    });
+
+    return lines;
+  }
+
+  private extractWrite(callExpression: CallExpression, handles: WriteHandles): DomainWrite | null {
     const calleeText = callExpression.getExpression().getText();
 
     if (calleeText === 'addDoc') {
@@ -270,13 +387,30 @@ export class CompositeWriteDetector {
       return this.extractDocWrite(callExpression, 'delete');
     }
 
-    if (
-      calleeText === 'transaction.set' ||
-      calleeText === 'transaction.update' ||
-      calleeText === 'transaction.delete'
-    ) {
-      const kind = calleeText.split('.')[1] as DomainWriteKind;
-      return this.extractDocWrite(callExpression, kind);
+    const memberWrite = this.parseMemberWrite(calleeText, handles);
+
+    if (memberWrite) {
+      return this.extractDocWrite(callExpression, memberWrite);
+    }
+
+    return null;
+  }
+
+  private parseMemberWrite(calleeText: string, handles: WriteHandles): DomainWriteKind | null {
+    const memberMatch = /^(\w+)\.(set|update|delete)$/.exec(calleeText);
+
+    if (!memberMatch) {
+      return null;
+    }
+
+    const [, handleName, method] = memberMatch;
+
+    if (!handleName || !method) {
+      return null;
+    }
+
+    if (handles.transaction.has(handleName) || handles.batch.has(handleName)) {
+      return method as DomainWriteKind;
     }
 
     return null;

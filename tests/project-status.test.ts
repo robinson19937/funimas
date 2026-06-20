@@ -53,6 +53,34 @@ export async function save() {
     expect(report.blockers[0]).toContain('no soportadas');
   });
 
+  it('marca runTransaction convertible como no bloqueante en status', async () => {
+    const projectDir = await createProject({
+      'src/data.ts': `import { doc, runTransaction } from 'firebase/firestore';
+import { db } from './firebase.js';
+
+export async function transferCredits(fromId, toId, amount) {
+  await runTransaction(db, async (tx) => {
+    tx.update(doc(db, 'accounts', fromId), { balance: 100 - amount });
+    tx.update(doc(db, 'accounts', toId), { balance: 100 + amount });
+  });
+}
+`,
+    });
+
+    const analyzer = new ProjectStatusAnalyzer();
+    const report = await analyzer.analyze(projectDir);
+
+    expect(report.unsupportedFindings.some((finding) => finding.callee === 'runTransaction')).toBe(
+      true,
+    );
+    expect(
+      report.unsupportedFindings.find((finding) => finding.callee === 'runTransaction')
+        ?.convertibleByDomainMutation,
+    ).toBe(true);
+    expect(report.firestoreUnsupported.runTransaction ?? 0).toBe(0);
+    expect(report.productionReady).toBe(true);
+  });
+
   it('marca proyecto como listo cuando solo usa APIs soportadas', async () => {
     const projectDir = await createProject({
       'src/data.ts': `import { getDoc, doc } from 'firebase/firestore';

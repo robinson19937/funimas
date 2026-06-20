@@ -9,7 +9,8 @@ Esta suite ejecuta el pipeline completo sobre fixtures representativos y valida 
 | `react-firebase-crud` | `examples/react-firebase-crud` | CRUD React básico |
 | `multi-company-onboarding` | fixture local | Alta multiempresa, `upsertDocumentAtPath`, `listWhere` |
 | `pwa-html-queries` | fixture local | Scripts inline en HTML + consultas `where` |
-| `unsupported-transaction` | fixture local | `runTransaction` se convierte en `Funimas.domain.execute` atómico |
+| `unsupported-transaction` | fixture local | `runTransaction` con lecturas dependientes → `Funimas.domain.execute` |
+| `unsupported-batch` | fixture local | `writeBatch` → `Funimas.domain.execute` atómico |
 
 ## Ejecutar
 
