@@ -162,6 +162,10 @@ export const REGRESSION_FIXTURES: RegressionFixtureDefinition[] = [
           includes: ["Funimas.domain.execute('registerCompany'"],
           excludes: ['setDoc(doc(db, \'users\'', 'merge: true'],
         },
+        {
+          file: 'runtime/domain/mutations.ts',
+          includes: ['"registerCompany"', '"$email"', '"$companyId"', '"$businessName"'],
+        },
       ],
     },
   },

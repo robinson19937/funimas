@@ -47,6 +47,14 @@ function buildObjectTemplate(node: Node): Record<string, unknown> {
       continue;
     }
 
+    if (property.getKind() === SyntaxKind.ShorthandPropertyAssignment) {
+      const shorthand = property.asKindOrThrow(SyntaxKind.ShorthandPropertyAssignment);
+      const name = shorthand.getName();
+
+      template[name] = `$${name}`;
+      continue;
+    }
+
     if (property.getKind() !== SyntaxKind.PropertyAssignment) {
       continue;
     }
