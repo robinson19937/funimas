@@ -41,15 +41,12 @@ describe('runtime write semantics', () => {
     expect(repository).toContain('.set(decodeWriteData(data), { merge: true })');
   });
 
-  it('prefetchea reads de upsert antes de writes en mutaciones de dominio', async () => {
+  it('aplica mutaciones de dominio con writes secuenciales (sin runTransaction)', async () => {
     const engine = new RuntimeTemplateEngine();
     const repository = await engine.render('runtime/repositories/firestoreRepository.hbs');
 
-    expect(repository).toContain('const upsertSnapshots = new Map<string, DocumentSnapshot>()');
-    expect(repository).toContain('upsertSnapshots.set(path, await transaction.get(getDb().doc(path)))');
-    expect(repository).toContain('applyDomainWrite(transaction, write, params, upsertSnapshots)');
-    expect(repository).not.toMatch(
-      /for \(const write of definition\.writes\) \{[\s\S]*applyDomainWrite[\s\S]*upsertSnapshots\.set/,
-    );
+    expect(repository).toContain('await this.upsertDocumentByPath(pathSegments, templateData)');
+    expect(repository).not.toContain('applyDomainWrite');
+    expect(repository).not.toContain('upsertSnapshots');
   });
 });

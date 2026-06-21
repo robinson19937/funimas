@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +10,14 @@ import {
   parseEnvFile,
   validateEnvValues,
 } from '../src/deploy/deploy-readiness-checker.js';
+
+const { privateKey: validPrivateKey } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+});
+
+const escapedPrivateKey = validPrivateKey.replace(/\n/g, '\\n');
 
 describe('env validation', () => {
   it('detecta variables de servidor incompletas', () => {
@@ -23,7 +32,7 @@ describe('env validation', () => {
     const values = parseEnvFile(`
 FIREBASE_PROJECT_ID=my-project
 FIREBASE_CLIENT_EMAIL=admin@my-project.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\\n"
+FIREBASE_PRIVATE_KEY="${escapedPrivateKey}"
 `);
 
     const result = validateEnvValues(values);
@@ -89,7 +98,7 @@ describe('DeployReadinessChecker', () => {
       join(workspacePath, '.env'),
       `FIREBASE_PROJECT_ID=my-project
 FIREBASE_CLIENT_EMAIL=admin@my-project.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\\n"
+FIREBASE_PRIVATE_KEY="${escapedPrivateKey}"
 `,
       'utf8',
     );

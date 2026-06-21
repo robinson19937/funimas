@@ -1,6 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { isValidFirebasePrivateKey } from '../utils/firebase-private-key.js';
 import {
   hasApiRedirect,
   hasFunctionsBundlerConfig,
@@ -74,7 +75,14 @@ export function validateEnvValues(values: Map<string, string>): EnvValidationRes
 
   const privateKey = values.get('FIREBASE_PRIVATE_KEY');
 
-  if (privateKey && !privateKey.includes('BEGIN PRIVATE KEY')) {
+  if (privateKey && !isValidFirebasePrivateKey(privateKey)) {
+    issues.push({
+      variable: 'FIREBASE_PRIVATE_KEY',
+      level: 'error',
+      message:
+        'FIREBASE_PRIVATE_KEY no es una clave PEM válida. Revisa saltos de línea (\\n) y vuelve a importar con funimas deploy --import-env.',
+    });
+  } else if (privateKey && !privateKey.includes('BEGIN PRIVATE KEY')) {
     issues.push({
       variable: 'FIREBASE_PRIVATE_KEY',
       level: 'warning',
