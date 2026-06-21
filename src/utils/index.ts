@@ -1,3 +1,4 @@
+export * from './firebase-private-key.js';
 export * from './operation-naming.js';
 export * from './output.js';
 export * from './project-fs.js';
