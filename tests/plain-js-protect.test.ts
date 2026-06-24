@@ -60,7 +60,7 @@ describe('plain JS project protect', () => {
     expect(firebaseConfig).toContain('configureFunimas');
     expect(firebaseConfig).toContain('from "./sdk/index.js"');
     expect(firebaseConfig).toContain(
-      'getIdToken: async () => auth.currentUser?.getIdToken() ?? null',
+      'getIdToken: async () => auth?.currentUser?.getIdToken() ?? null',
     );
 
     await expect(stat(join(workspacePath, 'tsconfig.json'))).resolves.toBeDefined();
