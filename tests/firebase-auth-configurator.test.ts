@@ -32,7 +32,7 @@ const auth = getAuth(app);
 
     expect(result.modifiedFiles).toEqual([join(workspacePath, 'js/firebase.js')]);
     expect(content).toContain('import { configureFunimas } from "../sdk/index.js";');
-    expect(content).toContain('getIdToken: async () => auth.currentUser?.getIdToken() ?? null');
+    expect(content).toContain('getIdToken: async () => auth?.currentUser?.getIdToken() ?? null');
     expect(configureIndex).toBeGreaterThan(authIndex);
   });
 
@@ -65,5 +65,58 @@ configureFunimas({
 
     expect(result.modifiedFiles).toHaveLength(0);
     expect(configureCalls).toHaveLength(1);
+  });
+
+  it('configura el SDK cuando getAuth viene de un módulo dinámico (authMod.getAuth)', () => {
+    const workspacePath = '/tmp/funimas-auth-member';
+    const project = new Project({
+      compilerOptions: {
+        allowJs: true,
+      },
+    });
+    const sourceFile = project.createSourceFile(
+      join(workspacePath, 'assets/js/app.js'),
+      `let internoFirebaseRuntime = null;
+
+const ensureInternoFirebaseRuntime = async () => {
+  const authMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+  const auth = authMod.getAuth(firebaseApp);
+  internoFirebaseRuntime = { firebaseApp, auth, authMod };
+};
+`,
+    );
+
+    const result = new FirebaseAuthConfigurator().configure(project, workspacePath);
+    const content = sourceFile.getFullText();
+
+    expect(result.modifiedFiles).toEqual([join(workspacePath, 'assets/js/app.js')]);
+    expect(content).toContain('internoFirebaseRuntime?.auth?.currentUser?.getIdToken()');
+    expect(content).toContain('configureFunimas({');
+  });
+
+  it('configura el SDK cuando auth se asigna en un módulo con let a nivel de archivo', () => {
+    const workspacePath = '/tmp/funimas-auth-assignment';
+    const project = new Project({
+      compilerOptions: {
+        allowJs: true,
+      },
+    });
+    const sourceFile = project.createSourceFile(
+      join(workspacePath, 'assets/js/calendario.js'),
+      `import { getAuth } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+
+let fbApp, auth;
+
+(async () => {
+  auth = getAuth(fbApp);
+})();
+`,
+    );
+
+    const result = new FirebaseAuthConfigurator().configure(project, workspacePath);
+    const content = sourceFile.getFullText();
+
+    expect(result.modifiedFiles).toEqual([join(workspacePath, 'assets/js/calendario.js')]);
+    expect(content).toContain('auth?.currentUser?.getIdToken()');
   });
 });

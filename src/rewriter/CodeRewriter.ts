@@ -4,6 +4,7 @@ import { Formatter } from './Formatter.js';
 import { FirebaseAuthConfigurator } from './FirebaseAuthConfigurator.js';
 import { ImportManager } from './ImportManager.js';
 import { HtmlScriptExtractor } from '../parser/HtmlScriptExtractor.js';
+import { HtmlModuleScriptUpgrader } from '../parser/HtmlModuleScriptUpgrader.js';
 import type { RewriteApplication } from './RewriteApplication.js';
 import type { RewriteContext } from './RewriteContext.js';
 import { RewriteRegistry } from './RewriteRegistry.js';
@@ -29,6 +30,7 @@ export interface CodeRewriterOptions {
   formatter?: Formatter;
   firebaseAuthConfigurator?: FirebaseAuthConfigurator;
   htmlScriptExtractor?: HtmlScriptExtractor;
+  htmlModuleScriptUpgrader?: HtmlModuleScriptUpgrader;
   now?: () => Date;
 }
 
@@ -46,6 +48,7 @@ export class CodeRewriter implements CodeRewriterService {
   private readonly formatter: Formatter;
   private readonly firebaseAuthConfigurator: FirebaseAuthConfigurator;
   private readonly htmlScriptExtractor: HtmlScriptExtractor;
+  private readonly htmlModuleScriptUpgrader: HtmlModuleScriptUpgrader;
   private readonly now: () => Date;
 
   constructor(options: CodeRewriterOptions = {}) {
@@ -55,6 +58,7 @@ export class CodeRewriter implements CodeRewriterService {
     this.formatter = options.formatter ?? new Formatter();
     this.firebaseAuthConfigurator = options.firebaseAuthConfigurator ?? new FirebaseAuthConfigurator();
     this.htmlScriptExtractor = options.htmlScriptExtractor ?? new HtmlScriptExtractor();
+    this.htmlModuleScriptUpgrader = options.htmlModuleScriptUpgrader ?? new HtmlModuleScriptUpgrader();
     this.now = options.now ?? (() => new Date());
   }
 
@@ -182,6 +186,7 @@ export class CodeRewriter implements CodeRewriterService {
     importsAdded.push(...authConfiguration.importsAdded);
 
     await this.htmlScriptExtractor.merge(context.workspacePath);
+    await this.htmlModuleScriptUpgrader.upgrade(context.workspacePath);
 
     const finishedAt = this.now();
 

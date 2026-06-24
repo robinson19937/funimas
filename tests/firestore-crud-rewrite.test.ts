@@ -75,7 +75,7 @@ describe('Firestore CRUD rewrite rules', () => {
       expect(firebaseContent).toContain('configureFunimas');
       expect(firebaseContent).toContain('from "../sdk/index.js"');
       expect(firebaseContent).toContain(
-        'getIdToken: async () => auth.currentUser?.getIdToken() ?? null',
+        'getIdToken: async () => auth?.currentUser?.getIdToken() ?? null',
       );
       expect(countFunimasCalls(servicePath, 'get')).toBe(1);
       expect(countFunimasCalls(servicePath, 'list')).toBe(1);
