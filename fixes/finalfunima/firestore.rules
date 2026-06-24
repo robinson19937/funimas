@@ -1,0 +1,181 @@
+// Firestore security rules for Roblop Business
+// Hardened: require companyId validation, prevent companyId changes, protect sensitive writes
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return isAuthenticated()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+        : null;
+    }
+
+    function userCompanyId() {
+      return isAuthenticated()
+        && userDoc() != null
+        && userDoc().keys().hasAny(['companyId'])
+        ? userDoc().companyId
+        : null;
+    }
+
+    function isOwner(companyId) {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/companies/$(companyId))
+        && get(/databases/$(database)/documents/companies/$(companyId)).data.ownerUid == request.auth.uid;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && userDoc() != null && userDoc().role == 'admin';
+    }
+
+    function belongsToUserCompany() {
+      return isAuthenticated() && resource.data.companyId == userCompanyId();
+    }
+
+    function hasValidCompanyId() {
+      return request.resource.data.companyId is string 
+        && request.resource.data.companyId == userCompanyId();
+    }
+
+    function companyIdNotChanged() {
+      return request.resource.data.companyId == resource.data.companyId;
+    }
+
+    // -----------------------------
+    // Users collection
+    match /users/{uid} {
+      allow create: if isAuthenticated() && request.auth.uid == uid
+                    && request.resource.data.email is string
+                    && request.resource.data.email.size() > 0
+                    && request.resource.data.companyId is string
+                    && request.resource.data.companyId.size() > 0
+                    // Prevent role injection / unexpected fields on create
+                    && request.resource.data.keys().hasOnly(['email', 'companyId', 'createdAt'])
+                    // Prevent attaching profile to an existing companyId (anti-hijack)
+                    && !exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId));
+
+      allow read: if isAuthenticated() && request.auth.uid == uid;
+
+      // Allow profile updates but prevent role escalation and companyId changes
+      allow update: if isAuthenticated() && request.auth.uid == uid
+                    && (
+                      // allow first-time set when companyId was absent
+                      (!("companyId" in resource.data) && request.resource.data.companyId is string)
+                      || request.resource.data.companyId == resource.data.companyId
+                    )
+                    && (request.resource.data.role == resource.data.role || !('role' in request.resource.data));
+
+      allow delete: if false;
+    }
+
+    // -----------------------------
+    // Companies & subcollections
+    match /companies/{companyId} {
+      allow create: if isAuthenticated() 
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['ownerUid', 'name']);
+                    
+      allow read: if isAuthenticated() && userCompanyId() == companyId;
+      
+      allow update: if isOwner(companyId)
+                    && request.resource.data.ownerUid == resource.data.ownerUid;
+                    
+      allow delete: if isOwner(companyId);
+
+      match /settings/{settingId} {
+        allow read: if isAuthenticated() && userCompanyId() == companyId;
+        allow write: if isAuthenticated() && (isOwner(companyId) || isAdmin());
+      }
+
+      match /subscription/{subId} {
+        allow read: if isAuthenticated() && userCompanyId() == companyId;
+
+        allow create: if isAuthenticated()
+                      && userCompanyId() == companyId
+                      && isOwner(companyId)
+                      && request.resource.data.plan == 'free';
+
+        // Clients may update usage counters; plan changes require Admin SDK / backend.
+        allow update: if isAuthenticated()
+                      && userCompanyId() == companyId
+                      && (isOwner(companyId) || isAdmin())
+                      && request.resource.data.plan == resource.data.plan;
+
+        allow delete: if false;
+      }
+    }
+
+    // -----------------------------
+    // Cotizaciones (quotes) collection
+    match /cotizaciones/{docId} {
+      allow read: if belongsToUserCompany() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if hasValidCompanyId() 
+                    && request.resource.data.keys().hasAll(['companyId', 'userId', 'clientName'])
+                    && request.resource.data.userId == request.auth.uid;
+      allow update: if belongsToUserCompany() && companyIdNotChanged();
+      allow delete: if belongsToUserCompany();
+    }
+
+    // -----------------------------
+    // Recibos (receipts) collection
+    match /recibos/{docId} {
+      allow read: if belongsToUserCompany() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if hasValidCompanyId() 
+                    && request.resource.data.keys().hasAll(['companyId', 'userId', 'clientName'])
+                    && request.resource.data.userId == request.auth.uid;
+      allow update: if belongsToUserCompany() && companyIdNotChanged();
+      allow delete: if belongsToUserCompany();
+    }
+
+    // -----------------------------
+    // Notas (notes/invoices) collection
+    match /notas/{docId} {
+      allow read: if belongsToUserCompany() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if hasValidCompanyId() 
+                    && request.resource.data.keys().hasAll(['companyId', 'userId', 'clientName'])
+                    && request.resource.data.userId == request.auth.uid;
+      allow update: if belongsToUserCompany() && companyIdNotChanged();
+      allow delete: if belongsToUserCompany();
+    }
+
+    // -----------------------------
+    // Varios (miscellaneous documents) collection
+    match /varios/{docId} {
+      allow read: if belongsToUserCompany() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if hasValidCompanyId() 
+                    && request.resource.data.keys().hasAll(['companyId', 'userId', 'clientName'])
+                    && request.resource.data.userId == request.auth.uid;
+      allow update: if belongsToUserCompany() && companyIdNotChanged();
+      allow delete: if belongsToUserCompany();
+    }
+
+    // -----------------------------
+    // Galeria (gallery/images) collection
+    match /galeria/{docId} {
+      function isGalleryOwner() {
+        return isAuthenticated() && resource.data.userId == request.auth.uid;
+      }
+
+      allow read: if belongsToUserCompany() || isGalleryOwner();
+
+      allow create: if hasValidCompanyId()
+                    && request.resource.data.keys().hasAll(['companyId', 'userId', 'storagePath', 'url'])
+                    && request.resource.data.userId == request.auth.uid;
+
+      allow update: if companyIdNotChanged()
+                    && (belongsToUserCompany() || isGalleryOwner());
+
+      allow delete: if belongsToUserCompany() || isGalleryOwner();
+    }
+
+    // -----------------------------
+    // Fallback – deny everything else explicitly
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

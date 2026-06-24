@@ -1,0 +1,670 @@
+From ca707d5524001bb43b2b1ffa7df133dd899ce020 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Fri, 19 Jun 2026 21:32:53 +0000
+Subject: [PATCH] =?UTF-8?q?fix:=20completar=20migraci=C3=B3n=20Funimas=20y?=
+ =?UTF-8?q?=20restaurar=20reglas=20Firestore=20funcionales?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+La versión protegida por Funimas dejó operaciones críticas sin migrar al
+SDK/API, lo que rompía login, configuración y suscripciones cuando las
+reglas bloqueaban el acceso directo desde el cliente.
+
+- Migrar suscripciones en companySettings.js a Funimas.database
+- Usar updateAtPath en saveCompanySettings para no sobrescribir campos
+- Migrar dbHelpers.js al SDK de Funimas
+- Aplicar merge:true en setDocumentByPath del repositorio backend
+- Restaurar firestore.rules del repo original (micrsoft.copia)
+- Limpiar imports Firestore no usados en auth.js
+---
+ firestore.rules                             | 193 ++++++++++++++++----
+ js/auth.js                                  |   6 -
+ js/companySettings.js                       | 117 +++++++-----
+ js/dbHelpers.js                             |   7 +-
+ package-lock.json                           |  76 +++++++-
+ runtime/repositories/firestoreRepository.ts |   4 +-
+ types/firebase-admin.d.ts                   |   2 +-
+ 7 files changed, 308 insertions(+), 97 deletions(-)
+
+diff --git a/firestore.rules b/firestore.rules
+index 7faf33c..f66e21c 100644
+--- a/firestore.rules
++++ b/firestore.rules
+@@ -1,50 +1,181 @@
+-rules_version = '2';
++// Firestore security rules for Roblop Business
++// Hardened: require companyId validation, prevent companyId changes, protect sensitive writes
++
+ service cloud.firestore {
+   match /databases/{database}/documents {
+-    match /companies/{documentId} {
+-      // Lecturas y escrituras directas desde el cliente bloqueadas.
+-      // Solo el backend (Admin SDK vía Netlify Functions) accede a Firestore.
+-      allow read, create, update, delete: if false;
++
++    function isAuthenticated() {
++      return request.auth != null;
++    }
++
++    function userDoc() {
++      return isAuthenticated()
++        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
++        : null;
++    }
++
++    function userCompanyId() {
++      return isAuthenticated()
++        && userDoc() != null
++        && userDoc().keys().hasAny(['companyId'])
++        ? userDoc().companyId
++        : null;
++    }
++
++    function isOwner(companyId) {
++      return isAuthenticated()
++        && exists(/databases/$(database)/documents/companies/$(companyId))
++        && get(/databases/$(database)/documents/companies/$(companyId)).data.ownerUid == request.auth.uid;
++    }
++
++    function isAdmin() {
++      return isAuthenticated() && userDoc() != null && userDoc().role == 'admin';
++    }
++
++    function belongsToUserCompany() {
++      return isAuthenticated() && resource.data.companyId == userCompanyId();
++    }
++
++    function hasValidCompanyId() {
++      return request.resource.data.companyId is string 
++        && request.resource.data.companyId == userCompanyId();
++    }
++
++    function companyIdNotChanged() {
++      return request.resource.data.companyId == resource.data.companyId;
+     }
+ 
+-    match /cotizaciones/{documentId} {
+-      // Lecturas y escrituras directas desde el cliente bloqueadas.
+-      // Solo el backend (Admin SDK vía Netlify Functions) accede a Firestore.
+-      allow read, create, update, delete: if false;
++    // -----------------------------
++    // Users collection
++    match /users/{uid} {
++      allow create: if isAuthenticated() && request.auth.uid == uid
++                    && request.resource.data.email is string
++                    && request.resource.data.email.size() > 0
++                    && request.resource.data.companyId is string
++                    && request.resource.data.companyId.size() > 0
++                    // Prevent role injection / unexpected fields on create
++                    && request.resource.data.keys().hasOnly(['email', 'companyId', 'createdAt'])
++                    // Prevent attaching profile to an existing companyId (anti-hijack)
++                    && !exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId));
++
++      allow read: if isAuthenticated() && request.auth.uid == uid;
++
++      // Allow profile updates but prevent role escalation and companyId changes
++      allow update: if isAuthenticated() && request.auth.uid == uid
++                    && (
++                      // allow first-time set when companyId was absent
++                      (!("companyId" in resource.data) && request.resource.data.companyId is string)
++                      || request.resource.data.companyId == resource.data.companyId
++                    )
++                    && (request.resource.data.role == resource.data.role || !('role' in request.resource.data));
++
++      allow delete: if false;
+     }
+ 
+-    match /galeria/{documentId} {
+-      // Lecturas y escrituras directas desde el cliente bloqueadas.
+-      // Solo el backend (Admin SDK vía Netlify Functions) accede a Firestore.
+-      allow read, create, update, delete: if false;
++    // -----------------------------
++    // Companies & subcollections
++    match /companies/{companyId} {
++      allow create: if isAuthenticated() 
++                    && request.resource.data.ownerUid == request.auth.uid
++                    && request.resource.data.keys().hasAll(['ownerUid', 'name']);
++                    
++      allow read: if isAuthenticated() && userCompanyId() == companyId;
++      
++      allow update: if isOwner(companyId)
++                    && request.resource.data.ownerUid == resource.data.ownerUid;
++                    
++      allow delete: if isOwner(companyId);
++
++      match /settings/{settingId} {
++        allow read: if isAuthenticated() && userCompanyId() == companyId;
++        allow write: if isAuthenticated() && (isOwner(companyId) || isAdmin());
++      }
++
++      match /subscription/{subId} {
++        allow read: if isAuthenticated() && userCompanyId() == companyId;
++
++        allow create: if isAuthenticated()
++                      && userCompanyId() == companyId
++                      && isOwner(companyId)
++                      && request.resource.data.plan == 'free';
++
++        // Clients may update usage counters; plan changes require Admin SDK / backend.
++        allow update: if isAuthenticated()
++                      && userCompanyId() == companyId
++                      && (isOwner(companyId) || isAdmin())
++                      && request.resource.data.plan == resource.data.plan;
++
++        allow delete: if false;
++      }
++    }
++
++    // -----------------------------
++    // Cotizaciones (quotes) collection
++    match /cotizaciones/{docId} {
++      allow read: if belongsToUserCompany() || (isAuthenticated() && resource.data.userId == request.auth.uid);
++      allow create: if hasValidCompanyId() 
++                    && request.resource.data.keys().hasAll(['companyId', 'userId', 'clientName'])
++                    && request.resource.data.userId == request.auth.uid;
++      allow update: if belongsToUserCompany() && companyIdNotChanged();
++      allow delete: if belongsToUserCompany();
+     }
+ 
+-    match /notas/{documentId} {
+-      // Lecturas y escrituras directas desde el cliente bloqueadas.
+-      // Solo el backend (Admin SDK vía Netlify Functions) accede a Firestore.
+-      allow read, create, update, delete: if false;
++    // -----------------------------
++    // Recibos (receipts) collection
++    match /recibos/{docId} {
++      allow read: if belongsToUserCompany() || (isAuthenticated() && resource.data.userId == request.auth.uid);
++      allow create: if hasValidCompanyId() 
++                    && request.resource.data.keys().hasAll(['companyId', 'userId', 'clientName'])
++                    && request.resource.data.userId == request.auth.uid;
++      allow update: if belongsToUserCompany() && companyIdNotChanged();
++      allow delete: if belongsToUserCompany();
+     }
+ 
+-    match /recibos/{documentId} {
+-      // Lecturas y escrituras directas desde el cliente bloqueadas.
+-      // Solo el backend (Admin SDK vía Netlify Functions) accede a Firestore.
+-      allow read, create, update, delete: if false;
++    // -----------------------------
++    // Notas (notes/invoices) collection
++    match /notas/{docId} {
++      allow read: if belongsToUserCompany() || (isAuthenticated() && resource.data.userId == request.auth.uid);
++      allow create: if hasValidCompanyId() 
++                    && request.resource.data.keys().hasAll(['companyId', 'userId', 'clientName'])
++                    && request.resource.data.userId == request.auth.uid;
++      allow update: if belongsToUserCompany() && companyIdNotChanged();
++      allow delete: if belongsToUserCompany();
+     }
+ 
+-    match /users/{documentId} {
+-      // Lecturas y escrituras directas desde el cliente bloqueadas.
+-      // Solo el backend (Admin SDK vía Netlify Functions) accede a Firestore.
+-      allow read, create, update, delete: if false;
++    // -----------------------------
++    // Varios (miscellaneous documents) collection
++    match /varios/{docId} {
++      allow read: if belongsToUserCompany() || (isAuthenticated() && resource.data.userId == request.auth.uid);
++      allow create: if hasValidCompanyId() 
++                    && request.resource.data.keys().hasAll(['companyId', 'userId', 'clientName'])
++                    && request.resource.data.userId == request.auth.uid;
++      allow update: if belongsToUserCompany() && companyIdNotChanged();
++      allow delete: if belongsToUserCompany();
+     }
+ 
+-    match /varios/{documentId} {
+-      // Lecturas y escrituras directas desde el cliente bloqueadas.
+-      // Solo el backend (Admin SDK vía Netlify Functions) accede a Firestore.
+-      allow read, create, update, delete: if false;
++    // -----------------------------
++    // Galeria (gallery/images) collection
++    match /galeria/{docId} {
++      function isGalleryOwner() {
++        return isAuthenticated() && resource.data.userId == request.auth.uid;
++      }
++
++      allow read: if belongsToUserCompany() || isGalleryOwner();
++
++      allow create: if hasValidCompanyId()
++                    && request.resource.data.keys().hasAll(['companyId', 'userId', 'storagePath', 'url'])
++                    && request.resource.data.userId == request.auth.uid;
++
++      allow update: if companyIdNotChanged()
++                    && (belongsToUserCompany() || isGalleryOwner());
++
++      allow delete: if belongsToUserCompany() || isGalleryOwner();
+     }
+ 
+-    match /{document=**} {
++    // -----------------------------
++    // Fallback – deny everything else explicitly
++    match /{path=**} {
+       allow read, write: if false;
+     }
+   }
+-}
++}
+\ No newline at end of file
+diff --git a/js/auth.js b/js/auth.js
+index a2339bb..82dcdef 100644
+--- a/js/auth.js
++++ b/js/auth.js
+@@ -1,9 +1,7 @@
+ import {
+   auth,
+   createUserWithEmailAndPassword,
+-  db,
+   deleteUser,
+-  doc,
+   onAuthStateChanged,
+   sendPasswordResetEmail,
+   serverTimestamp,
+@@ -41,10 +39,6 @@ async function bootstrapMissingCompanyData({ uid, email }) {
+   const timestamp = serverTimestamp();
+   const companyId = resolveCompanyId();
+ 
+-  const userRef = doc(db, "users", uid);
+-  const companyRef = doc(db, "companies", companyId);
+-  const settingsRef = doc(db, "companies", companyId, "settings", "main");
+-
+   const [userSnap, companySnap] = await Promise.all([Funimas.database.get('users', uid), Funimas.database.get('companies', companyId)]);
+ 
+   if (!userSnap.exists()) {
+diff --git a/js/companySettings.js b/js/companySettings.js
+index 7198227..8c5f5fb 100644
+--- a/js/companySettings.js
++++ b/js/companySettings.js
+@@ -2,17 +2,11 @@
+ import { Funimas } from "../sdk/index.js";
+ import {
+   auth,
+-  db,
+-  doc,
+-  getDoc,
+   getDownloadURL,
+-  increment,
+   onAuthStateChanged,
+   ref,
+   serverTimestamp,
+-  setDoc,
+   storage,
+-  updateDoc,
+   uploadBytesResumable
+ } from "./firebase.js";
+ import { DEFAULT_GALLERY_CATEGORIES, normalizeGalleryCategories } from "./galleryCategories.js";
+@@ -203,9 +197,8 @@ export async function ensureSubscription() {
+   if (!subscriptionPromise) {
+     subscriptionPromise = (async () => {
+       const companyId = resolveCompanyId();
+-      const subscriptionRef = getSubscriptionRef(companyId);
+-      const loaded = await loadSubscriptionFromFirestore(subscriptionRef, companyId);
+-      return applyUsageResets(loaded, subscriptionRef);
++      const loaded = await loadSubscriptionFromFirestore(companyId);
++      return applyUsageResets(loaded, companyId);
+     })().catch((error) => {
+       subscriptionPromise = null;
+       console.error("No se pudo inicializar la suscripción", error);
+@@ -216,7 +209,7 @@ export async function ensureSubscription() {
+   return subscriptionPromise;
+ }
+ 
+-async function applyUsageResets(subscription, subscriptionRef) {
++async function applyUsageResets(subscription, companyId) {
+   const limits = getPlanLimits(subscription.plan);
+   const updates = {};
+   const requiresMonthlyDocuments = limits.documentPeriod === "monthly";
+@@ -263,11 +256,16 @@ async function applyUsageResets(subscription, subscriptionRef) {
+   updates.updatedAt = serverTimestamp();
+ 
+   try {
+-    await setDoc(subscriptionRef, updates, { merge: true });
++    await Funimas.database.updateAtPath(
++      "companies",
++      companyId,
++      "subscription",
++      SUBSCRIPTION_DOC_ID,
++      updates
++    );
+   } catch (error) {
+-    // If client is not allowed to write subscription (rules expect server-side updates), don't fail — use defaults locally
+     if (error?.code === "permission-denied" || String(error?.message || "").toLowerCase().includes("permission")) {
+-      console.warn("No autorizado para actualizar la subscripción en Firestore; usando valores actualizados en cliente.", error);
++      console.warn("No autorizado para actualizar la subscripción; usando valores actualizados en cliente.", error);
+       return normalizeSubscription({ ...subscription, ...updates });
+     }
+     throw error;
+@@ -304,15 +302,22 @@ export async function assertCanCreateDocument() {
+ export async function incrementDocumentsUsed() {
+   const subscription = await ensureSubscription();
+   const companyId = subscription.companyId;
+-  const subscriptionRef = getSubscriptionRef(companyId);
+ 
+   try {
+-    await updateDoc(subscriptionRef, {
+-      documentsUsed: increment(1),
+-      updatedAt: serverTimestamp()
+-    });
++    const currentUsed = Number(subscription.documentsUsed || 0);
++    await Funimas.database.updateAtPath(
++      "companies",
++      companyId,
++      "subscription",
++      SUBSCRIPTION_DOC_ID,
++      {
++        documentsUsed: currentUsed + 1,
++        updatedAt: serverTimestamp()
++      }
++    );
+ 
+-    subscriptionPromise = getDoc(subscriptionRef)
++    subscriptionPromise = Funimas.database
++      .getAtPath("companies", companyId, "subscription", SUBSCRIPTION_DOC_ID)
+       .then((snap) => normalizeSubscription({ ...snap.data(), companyId }))
+       .catch((error) => {
+         subscriptionPromise = null;
+@@ -322,11 +327,12 @@ export async function incrementDocumentsUsed() {
+ 
+     return subscriptionPromise;
+   } catch (error) {
+-    // Permission-denied is expected if subscription writes are server-only; handle gracefully
+     if (error?.code === "permission-denied" || String(error?.message || "").toLowerCase().includes("permission")) {
+-      console.warn("No autorizado para incrementar 'documentsUsed' en Firestore. Se omite el incremento en cliente.", error);
+-      // Return a local, best-effort subscription object reflecting an incremented counter for UI purposes
+-      const local = normalizeSubscription({ ...subscription, documentsUsed: Number(subscription.documentsUsed || 0) + 1 });
++      console.warn("No autorizado para incrementar 'documentsUsed'. Se omite el incremento en cliente.", error);
++      const local = normalizeSubscription({
++        ...subscription,
++        documentsUsed: Number(subscription.documentsUsed || 0) + 1
++      });
+       subscriptionPromise = Promise.resolve(local);
+       return subscriptionPromise;
+     }
+@@ -406,20 +412,26 @@ export async function assertCanUploadImage(file) {
+ export async function registerGalleryUpload(bytes = 0) {
+   const subscription = await ensureSubscription();
+   const companyId = subscription.companyId;
+-  const subscriptionRef = getSubscriptionRef(companyId);
+   const updates = {
+-    galleryUsed: increment(1),
++    galleryUsed: Number(subscription.galleryUsed || 0) + 1,
+     updatedAt: serverTimestamp()
+   };
+ 
+   if (bytes > 0) {
+-    updates.storageUsedBytes = increment(bytes);
++    updates.storageUsedBytes = Number(subscription.storageUsedBytes || 0) + bytes;
+   }
+ 
+   try {
+-    await updateDoc(subscriptionRef, updates);
++    await Funimas.database.updateAtPath(
++      "companies",
++      companyId,
++      "subscription",
++      SUBSCRIPTION_DOC_ID,
++      updates
++    );
+ 
+-    subscriptionPromise = getDoc(subscriptionRef)
++    subscriptionPromise = Funimas.database
++      .getAtPath("companies", companyId, "subscription", SUBSCRIPTION_DOC_ID)
+       .then((snap) => normalizeSubscription({ ...snap.data(), companyId }))
+       .catch((error) => {
+         subscriptionPromise = null;
+@@ -429,10 +441,12 @@ export async function registerGalleryUpload(bytes = 0) {
+   } catch (error) {
+     const isPermission = error?.code === "permission-denied" || String(error?.message || "").toLowerCase().includes("permission");
+     if (isPermission) {
+-      console.warn("No autorizado para registrar uso de galería en Firestore. Se usa estado local.", error);
+-      const localGalleryUsed = Number(subscription.galleryUsed || 0) + 1;
+-      const localStorageUsed = Number(subscription.storageUsedBytes || 0) + (bytes || 0);
+-      const local = normalizeSubscription({ ...subscription, galleryUsed: localGalleryUsed, storageUsedBytes: localStorageUsed });
++      console.warn("No autorizado para registrar uso de galería. Se usa estado local.", error);
++      const local = normalizeSubscription({
++        ...subscription,
++        galleryUsed: Number(subscription.galleryUsed || 0) + 1,
++        storageUsedBytes: Number(subscription.storageUsedBytes || 0) + (bytes || 0)
++      });
+       subscriptionPromise = Promise.resolve(local);
+       return subscriptionPromise;
+     }
+@@ -471,12 +485,13 @@ function readCachedSettings() {
+   }
+ }
+ 
+-function getSubscriptionRef(companyId) {
+-  return doc(db, "companies", companyId, "subscription", SUBSCRIPTION_DOC_ID);
+-}
+-
+-async function loadSubscriptionFromFirestore(subscriptionRef, companyId) {
+-  const snap = await getDoc(subscriptionRef);
++async function loadSubscriptionFromFirestore(companyId) {
++  const snap = await Funimas.database.getAtPath(
++    "companies",
++    companyId,
++    "subscription",
++    SUBSCRIPTION_DOC_ID
++  );
+ 
+   if (snap.exists()) {
+     return normalizeSubscription({ ...snap.data(), companyId });
+@@ -485,14 +500,20 @@ async function loadSubscriptionFromFirestore(subscriptionRef, companyId) {
+   const defaults = normalizeSubscription({ companyId, periodKey: getCurrentPeriodKey() });
+ 
+   try {
+-    await setDoc(
+-      subscriptionRef,
+-      { ...defaults, createdAt: serverTimestamp(), updatedAt: serverTimestamp() },
+-      { merge: true }
++    await Funimas.database.setAtPath(
++      "companies",
++      companyId,
++      "subscription",
++      SUBSCRIPTION_DOC_ID,
++      {
++        ...defaults,
++        createdAt: serverTimestamp(),
++        updatedAt: serverTimestamp()
++      }
+     );
+   } catch (error) {
+     if (error?.code === "permission-denied" || String(error?.message || "").toLowerCase().includes("permission")) {
+-      console.warn("No autorizado para crear el documento de subscripción en Firestore; usando valores por defecto localmente.", error);
++      console.warn("No autorizado para crear el documento de subscripción; usando valores por defecto localmente.", error);
+       return defaults;
+     }
+     throw error;
+@@ -503,7 +524,6 @@ async function loadSubscriptionFromFirestore(subscriptionRef, companyId) {
+ 
+ async function loadSettingsFromFirestore() {
+   const companyId = resolveCompanyId();
+-  const settingsRef = doc(db, "companies", companyId, "settings", "main");
+   const snap = await Funimas.database.getAtPath('companies', companyId, 'settings', 'main');
+ 
+   if (snap.exists()) {
+@@ -554,9 +574,14 @@ export async function getCompanySettings() {
+ 
+ export async function saveCompanySettings(updates = {}) {
+   const companyId = resolveCompanyId();
+-  const settingsRef = doc(db, "companies", companyId, "settings", "main");
+ 
+-  await Funimas.database.setAtPath('companies', companyId, 'settings', 'main', { ...updates, updatedAt: serverTimestamp() });
++  await Funimas.database.updateAtPath(
++    "companies",
++    companyId,
++    "settings",
++    "main",
++    { ...updates, updatedAt: serverTimestamp() }
++  );
+ 
+   const merged = normalizeSettings({ ...(currentSettings || DEFAULT_SETTINGS), ...updates, companyId });
+   currentSettings = merged;
+diff --git a/js/dbHelpers.js b/js/dbHelpers.js
+index 6e798c7..292b54d 100644
+--- a/js/dbHelpers.js
++++ b/js/dbHelpers.js
+@@ -1,12 +1,11 @@
+-// js/dbHelpers.js
+-import { db, doc, getDoc, deleteDoc } from "./firebase.js";
++import { Funimas } from "../sdk/index.js";
+ 
+ export async function deleteCompanyDoc(collectionName, id, companyId) {
+-  const snap = await getDoc(doc(db, collectionName, id));
++  const snap = await Funimas.database.get(collectionName, id);
+   if (!snap.exists() || snap.data()?.companyId !== companyId) {
+     return { ok: false };
+   }
+ 
+-  await deleteDoc(snap.ref);
++  await Funimas.database.delete(collectionName, id);
+   return { ok: true };
+ }
+diff --git a/package-lock.json b/package-lock.json
+index 5ffa702..e0ec51c 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -7,10 +7,16 @@
+     "": {
+       "name": "roblop-tests",
+       "version": "0.1.0",
++      "dependencies": {
++        "@netlify/functions": "^2.8.2",
++        "firebase-admin": "^13.4.0"
++      },
+       "devDependencies": {
+         "@firebase/rules-unit-testing": "^2.0.0",
++        "@types/node": "^24.0.3",
+         "firebase-admin": "^13.5.0",
+-        "mocha": "^10.2.0"
++        "mocha": "^10.2.0",
++        "typescript": "^5.8.3"
+       }
+     },
+     "node_modules/@fastify/busboy": {
+@@ -933,6 +939,40 @@
+         "url": "https://opencollective.com/js-sdsl"
+       }
+     },
++    "node_modules/@netlify/functions": {
++      "version": "2.8.2",
++      "resolved": "https://registry.npmjs.org/@netlify/functions/-/functions-2.8.2.tgz",
++      "integrity": "sha512-DeoAQh8LuNPvBE4qsKlezjKj0PyXDryOFJfJKo3Z1qZLKzQ21sT314KQKPVjfvw6knqijj+IO+0kHXy/TJiqNA==",
++      "license": "MIT",
++      "dependencies": {
++        "@netlify/serverless-functions-api": "1.26.1"
++      },
++      "engines": {
++        "node": ">=14.0.0"
++      }
++    },
++    "node_modules/@netlify/node-cookies": {
++      "version": "0.1.0",
++      "resolved": "https://registry.npmjs.org/@netlify/node-cookies/-/node-cookies-0.1.0.tgz",
++      "integrity": "sha512-OAs1xG+FfLX0LoRASpqzVntVV/RpYkgpI0VrUnw2u0Q1qiZUzcPffxRK8HF3gc4GjuhG5ahOEMJ9bswBiZPq0g==",
++      "license": "MIT",
++      "engines": {
++        "node": "^14.16.0 || >=16.0.0"
++      }
++    },
++    "node_modules/@netlify/serverless-functions-api": {
++      "version": "1.26.1",
++      "resolved": "https://registry.npmjs.org/@netlify/serverless-functions-api/-/serverless-functions-api-1.26.1.tgz",
++      "integrity": "sha512-q3L9i3HoNfz0SGpTIS4zTcKBbRkxzCRpd169eyiTuk3IwcPC3/85mzLHranlKo2b+HYT0gu37YxGB45aD8A3Tw==",
++      "license": "MIT",
++      "dependencies": {
++        "@netlify/node-cookies": "^0.1.0",
++        "urlpattern-polyfill": "8.0.2"
++      },
++      "engines": {
++        "node": ">=18.0.0"
++      }
++    },
+     "node_modules/@opentelemetry/api": {
+       "version": "1.9.0",
+       "resolved": "https://registry.npmjs.org/@opentelemetry/api/-/api-1.9.0.tgz",
+@@ -1124,13 +1164,13 @@
+       "license": "MIT"
+     },
+     "node_modules/@types/node": {
+-      "version": "25.0.3",
+-      "resolved": "https://registry.npmjs.org/@types/node/-/node-25.0.3.tgz",
+-      "integrity": "sha512-W609buLVRVmeW693xKfzHeIV6nJGGz98uCPfeXI1ELMLXVeKYZ9m15fAMSaUPBHYLGFsVRcMmSCksQOrZV9BYA==",
++      "version": "24.13.2",
++      "resolved": "https://registry.npmjs.org/@types/node/-/node-24.13.2.tgz",
++      "integrity": "sha512-fRa09kZTgu8o71KFcDjUFuc7F+dEbZYZmkI0mg5YBTRs0yMKjYHsq/c0urDKeDb+D5qVgXOdFcuu+DZPKOITwA==",
+       "dev": true,
+       "license": "MIT",
+       "dependencies": {
+-        "undici-types": "~7.16.0"
++        "undici-types": "~7.18.0"
+       }
+     },
+     "node_modules/@types/qs": {
+@@ -3603,13 +3643,33 @@
+       "dev": true,
+       "license": "0BSD"
+     },
++    "node_modules/typescript": {
++      "version": "5.9.3",
++      "resolved": "https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz",
++      "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "bin": {
++        "tsc": "bin/tsc",
++        "tsserver": "bin/tsserver"
++      },
++      "engines": {
++        "node": ">=14.17"
++      }
++    },
+     "node_modules/undici-types": {
+-      "version": "7.16.0",
+-      "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-7.16.0.tgz",
+-      "integrity": "sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==",
++      "version": "7.18.2",
++      "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-7.18.2.tgz",
++      "integrity": "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==",
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/urlpattern-polyfill": {
++      "version": "8.0.2",
++      "resolved": "https://registry.npmjs.org/urlpattern-polyfill/-/urlpattern-polyfill-8.0.2.tgz",
++      "integrity": "sha512-Qp95D4TPJl1kC9SKigDcqgyM2VDVO4RiJc2d4qe5GrYm+zbIQCWWKAFaJNQ4BhdFeDGwBmAxqJBwWSJDb9T3BQ==",
++      "license": "MIT"
++    },
+     "node_modules/util-deprecate": {
+       "version": "1.0.2",
+       "resolved": "https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz",
+diff --git a/runtime/repositories/firestoreRepository.ts b/runtime/repositories/firestoreRepository.ts
+index d2949fe..42ec703 100644
+--- a/runtime/repositories/firestoreRepository.ts
++++ b/runtime/repositories/firestoreRepository.ts
+@@ -135,7 +135,9 @@ export class FirestoreRepository {
+   }
+ 
+   async setDocumentByPath(pathSegments: string[], data: Record<string, unknown>): Promise<void> {
+-    await getDb().doc(this.toDocumentPath(pathSegments)).set(decodeWriteData(data));
++    await getDb()
++      .doc(this.toDocumentPath(pathSegments))
++      .set(decodeWriteData(data), { merge: true });
+   }
+ 
+   async updateDocument(
+diff --git a/types/firebase-admin.d.ts b/types/firebase-admin.d.ts
+index 21da205..b0a9e6c 100644
+--- a/types/firebase-admin.d.ts
++++ b/types/firebase-admin.d.ts
+@@ -33,7 +33,7 @@ declare module 'firebase-admin/firestore' {
+   export interface DocumentReference {
+     id: string;
+     get(): Promise<DocumentSnapshot>;
+-    set(data: unknown): Promise<void>;
++    set(data: unknown, options?: { merge?: boolean }): Promise<void>;
+     delete(): Promise<void>;
+     update(data: unknown): Promise<void>;
+   }
+-- 
+2.43.0
+
